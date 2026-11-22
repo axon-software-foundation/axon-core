@@ -651,6 +651,75 @@ void test_function_parameter_shadowing() {
 void test_function_early_return() {
     ASSERT_EQ(run("func f(n) { if n > 0 { return 9 } return 1 } main { return f(3) }").n, 9.0);
 }
+
+static void expect_arity_error(const std::string& source, const std::string& detail) {
+    try { run(source); }
+    catch (const std::runtime_error& error) {
+        ASSERT_TRUE(std::string(error.what()).find("uncaught raise: ArityError: " + detail)
+                    != std::string::npos);
+        return;
+    }
+    throw std::runtime_error("expected an arity error");
+}
+
+void test_function_arity_missing() {
+    expect_arity_error("func add(a,b) { return a+b } main { add(1) }",
+                       "function 'add' expects 2 argument(s), got 1");
+}
+void test_function_arity_extra() {
+    expect_arity_error("func f(x) { return x } main { f(1,2) }",
+                       "function 'f' expects 1 argument(s), got 2");
+}
+void test_function_arity_anonymous_and_arrow() {
+    expect_arity_error("main { f=func(x) { return x } f() }",
+                       "anonymous function expects 1 argument(s), got 0");
+    expect_arity_error("main { f=(x)=>x f(1,2) }",
+                       "anonymous function expects 1 argument(s), got 2");
+}
+void test_function_arity_closure_and_chained() {
+    const std::string factory = "func make(x) { return (y)=>x+y } ";
+    expect_arity_error(factory + "main { f=make(10) f() }",
+                       "anonymous function expects 1 argument(s), got 0");
+    expect_arity_error(factory + "main { make(10)(1,2) }",
+                       "anonymous function expects 1 argument(s), got 2");
+}
+void test_function_arity_higher_order() {
+    expect_arity_error("func invoke(f) { return f() } main { invoke((x)=>x) }",
+                       "anonymous function expects 1 argument(s), got 0");
+}
+void test_function_arity_null_and_zero() {
+    ASSERT_EQ(run("func identity(x) { return x } main { return typeof(identity(null)) }").s,
+              std::string("null"));
+    ASSERT_EQ(run("func f() { return 42 } main { return f() }").n, 42.0);
+    expect_arity_error("func f() { return 42 } main { f(null) }",
+                       "function 'f' expects 0 argument(s), got 1");
+}
+void test_function_arity_catch_and_recovery() {
+    ASSERT_EQ(run(R"(
+        func add(a,b) { return a+b }
+        main {
+            caught = false
+            try { add(1) } catch err {
+                if err.find("ArityError:") != 0 { raise "wrong error" }
+                caught = true
+            }
+            if caught == false { raise "arity error was not caught" }
+            return add(20,22)
+        }
+    )").n, 42.0);
+}
+void test_function_arity_rejects_before_side_effects() {
+    auto provider = std::make_shared<RecordingProvider>();
+    const std::string source = processor("task Analyze { prompt=[\"record\"] }") + R"(
+        func f(x) { Processor("body") return x }
+        main {
+            try { f(Processor("first"), Processor("extra")) }
+            catch err { return err }
+        }
+    )";
+    ASSERT_TRUE(run_recorded(source, provider).s.find("ArityError:") == 0);
+    ASSERT_TRUE(provider->requests.empty());
+}
 void test_hash_sha256_vector() {
     ASSERT_EQ(run("main { return hash->sha256(\"abc\") }").s,
               std::string("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));
@@ -981,6 +1050,14 @@ int main() {
     TEST(function_nested_scope);
     TEST(function_parameter_shadowing);
     TEST(function_early_return);
+    TEST(function_arity_missing);
+    TEST(function_arity_extra);
+    TEST(function_arity_anonymous_and_arrow);
+    TEST(function_arity_closure_and_chained);
+    TEST(function_arity_higher_order);
+    TEST(function_arity_null_and_zero);
+    TEST(function_arity_catch_and_recovery);
+    TEST(function_arity_rejects_before_side_effects);
     TEST(hash_sha256_vector);
     TEST(hash_md5_vector);
     TEST(hash_unsupported_rejected);

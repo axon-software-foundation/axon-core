@@ -30,9 +30,11 @@ The baseline's external-service detection can print an informational Ollama-unav
 ## What the checks establish
 
 - Runtime suite: 31 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 78 cases covering expressions, functions, task input/output and delays, among others.
-- CTest after this documentation change: 23 entries, including the two suites, CLI regressions/version
-  and the new `docs.examples` check. CTest reuses suites; do not add these counts as independent unit tests.
+- Interpreter suite: 86 cases covering expressions, functions, task input/output and delays, among others.
+  Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
+- CTest: 25 entries, including the two suites, CLI regressions/version and `docs.examples`.
+  The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
+  CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
   `run` or `check`: self-contained examples execute with assertions, model-dependent examples receive
   syntax checks only. An unmarked fence, parser error, execution error or timeout fails the check.
@@ -53,6 +55,11 @@ The runtime suite includes intentional invalid actor transitions; their diagnost
 when the enclosing negative test passes.
 
 ## Recorded platform evidence
+
+The strict user-function arity change was locally built on Linux with GCC 14.2, Release,
+`AXON_WARNINGS_AS_ERRORS=ON` and `_FORTIFY_SOURCE=2`. All 25 CTest entries passed, including
+31 runtime cases, 86 interpreter cases and the checked Markdown programs. Windows and macOS
+validation of this change still belongs to the PR's CI; previous runs do not certify this patch.
 
 The baseline [Axon CI run](https://github.com/axon-software-foundation/axon-core/actions/runs/44988638334)
 at `7a1537f` passed all six jobs: Linux GCC Debug/Release, Windows UCRT64 Debug/Release,

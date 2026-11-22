@@ -4,6 +4,11 @@ Current development version: **0.4.0-alpha.1**. Reviewed against public-main bas
 on 22 November 2026. Implementation, validation and publication are separate states.
 The [capability inventory](../FEATURES.md) records evidence; historical RFC phases do not establish status.
 
+The first prerelease is now published. Further Core work targets a usable release without a
+prerelease suffix; see [STABLE_RELEASE.md](STABLE_RELEASE.md) for the current execution order.
+The historical first-alpha preparation list below is retained for context, not a request to repeat
+completed publication or the maintainer's manual validation.
+
 ## 1. Stabilize the execution contract
 
 Implemented with focused regressions: functions/closures, relative imports, CLI diagnostics,
@@ -45,7 +50,8 @@ These are future implementation blocks; the existing specialized Ollama HTTP cli
 
 ## 5. Language and multi-flow
 
-Specify strict arity, returns, function representation and diagnostics. Design variadics, named arguments,
+Strict arity is implemented for user-defined functions, with catchable errors and regression coverage.
+Specify remaining return semantics, function representation and diagnostics. Design variadics, named arguments,
 unpacking, selective imports and optional annotations before adding syntax.
 Complete agent ownership by flow, context isolation and explicit flow invocation/chaining.
 Clarify module collisions and exports. Migrate remaining legacy examples; verify each against current code

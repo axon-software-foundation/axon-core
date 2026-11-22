@@ -8,7 +8,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | Capability | Current status | Evidence / limits |
 | --- | --- | --- |
 | Lexer/parser and CLI check/run | Implemented, selected positive/negative tests | `tests/test_cli.cmake`; `check` does not recursively resolve imports |
-| Functions, recursion, closures, positional calls | Implemented and tested | `test_function_*` in `tests/test_interpreter.cpp`; strict arity/keywords/variadics pending |
+| Functions, recursion, closures, positional calls | Implemented and tested, including strict user-function arity | `test_function_*` in `tests/test_interpreter.cpp`; keywords/variadics/default parameters pending |
 | Basic control flow and values | Implemented and tested | Interpreter tests; functions currently report `typeof == "dict"` |
 | Relative imports/private symbols | Implemented, CLI regressions | Canonical duplicate/circular loads are skipped, not a full cycle resolver |
 | Three agent invocation forms | Implemented and tested | `Agent(value)`, `Agent->Task(value)`, `value >> Agent` |

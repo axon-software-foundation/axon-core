@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Require exact positional arity for user-defined functions, including closures, anonymous/arrow
+  functions and imported functions. Invalid calls raise a catchable `ArityError` before evaluating
+  arguments or executing the body. Existing code that relied on missing arguments becoming `null`
+  or extra arguments being ignored must pass the declared number of arguments explicitly.
+- Add eight interpreter regressions, two CLI regressions and a checked documentation example
+  for argument counts, call-line diagnostics and recovery.
+
 - Replace outdated language claims with English references tied to the current interpreter and tests.
 - Add CTest checks of actual README/language/module Markdown examples: execution for self-contained
   programs, syntax-only for examples requiring a model service.

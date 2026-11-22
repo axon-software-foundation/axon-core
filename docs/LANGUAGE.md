@@ -35,9 +35,26 @@ main {
 ```
 
 Functions support positional arguments, recursion, closures, anonymous `func` expressions,
-arrow functions and early `return`. Missing positional arguments currently bind to `null`;
-extra arguments are not a supported arity contract. Named arguments, variadics and type
-annotations are pending; this alpha does not promise strict arity validation.
+arrow functions and early `return`. User-defined functions require exactly the declared number
+of arguments. Missing or extra arguments raise a catchable `ArityError` with the expected and
+actual counts and the call's line number, before argument expressions or the body execute.
+An explicit `null` counts as an argument. This rule also applies to imported functions,
+closures and chained calls. Built-ins, modules and agent/task calls retain their existing contracts.
+Named arguments, variadics, default parameter values and type annotations are pending.
+
+<!-- axon-check: run -->
+```axon
+func add(a, b) { return a + b }
+main {
+    caught = false
+    try { add(1) } catch err {
+        if err.find("ArityError:") != 0 { raise "unexpected error" }
+        caught = true
+    }
+    if caught == false { raise "missing argument was accepted" }
+    if add(20, 22) != 42 { raise "valid call failed after recovery" }
+}
+```
 
 Arithmetic includes `+ - * / % **`; comparisons include `== != < > <= >=`.
 Logical operators are `&&`, `||` and `!`. Division by zero is a controlled error.
