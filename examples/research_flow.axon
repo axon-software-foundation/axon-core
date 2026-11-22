@@ -1,0 +1,185 @@
+# ============================================================
+#  examples/research_flow.axon
+#
+#  Cognitive Flow Oriented — Axon Language
+#  A real example showing the full language surface.
+# ============================================================
+
+import session
+import memory
+
+# ── Flow declaration ─────────────────────────────────────────
+flow ResearchPipeline {
+    version   = "1.0"
+    session   = session.new()
+    telemetry = true
+}
+
+# ── Roles ────────────────────────────────────────────────────
+role Researcher {
+    goal    = "gather and analyze information"
+    style   = "thorough"
+}
+
+role Critic {
+    goal    = "validate accuracy and flag hallucinations"
+    style   = "skeptical"
+}
+
+# ── Agents ───────────────────────────────────────────────────
+agent DataCollector {
+    provider  ollama
+    model     llama3
+
+    role      Researcher
+    session   = flow.session
+
+    memory {
+        runtime  = enabled
+        session  = enabled
+    }
+
+    validation {
+        confidence  > 0.75
+        format      = json
+        max_retries = 3
+        on_fail     = retry
+    }
+
+    task Collect {
+        input  = flow.input
+        output = json
+    }
+
+    main {
+        if flow.input.isempty() {
+            raise "InputError: flow input cannot be empty"
+        }
+
+        python {
+            import json
+            raw = {
+                "query":  flow_input,
+                "source": "internal",
+                "ts":     __import__("time").time()
+            }
+            __cog_result__ = json.dumps(raw)
+        }
+
+        collected = __cog_result__
+        return collected
+    }
+}
+
+agent Analyst {
+    provider  anthropic
+    model     claude-3-5-sonnet
+
+    role      Researcher
+    session   = flow.session
+
+    memory {
+        runtime  = enabled
+        session  = enabled
+        semantic = enabled
+    }
+
+    validation {
+        confidence  > 0.85
+        format      = json
+        max_retries = 2
+        on_fail     = flag
+    }
+
+    learning {
+        method    = imprinting
+        capture   = on_success
+        threshold = 0.9
+        compress  = semantic
+    }
+
+    task Analyze {
+        input  = __input__
+        output = json
+    }
+
+    main {
+        data = __input__
+
+        match data {
+            null -> return "no data received"
+            _    -> {
+                python {
+                    import json
+                    parsed     = json.loads(data) if data else {}
+                    enriched   = {**parsed, "analyzed": True, "confidence": 0.91}
+                    __cog_result__ = json.dumps(enriched)
+                }
+                return __cog_result__
+            }
+        }
+    }
+}
+
+agent Validator {
+    provider  ollama
+    model     llama3
+
+    role      Critic
+    session   = flow.session
+
+    memory {
+        runtime = enabled
+    }
+
+    validation {
+        confidence  > 0.90
+        max_retries = 1
+        on_fail     = raise
+    }
+
+    task Validate {
+        input  = __input__
+        output = json
+    }
+
+    main {
+        analysis = __input__
+
+        try {
+            python {
+                import json
+                data = json.loads(analysis) if analysis else {}
+                is_valid   = data.get("analyzed", False) is True
+                confidence = data.get("confidence", 0.0)
+                __cog_result__ = {
+                    "valid":      is_valid,
+                    "confidence": confidence,
+                    "verdict":    "approved" if is_valid else "rejected"
+                }
+            }
+        } catch err {
+            return "validation error: " + err
+        }
+
+        result = __cog_result__
+
+        if result["valid"] {
+            return result
+        } else {
+            raise "ValidationFailed: analysis did not pass quality check"
+        }
+    }
+}
+
+# ── Execution graph ──────────────────────────────────────────
+graph {
+    DataCollector -> Analyst   [on_success]
+    DataCollector -> DataCollector [on_fail, max_retries = 2]
+
+    Analyst -> Validator       [on_success]
+    Analyst -> DataCollector   [condition = "confidence < 0.8"]
+
+    Validator -> done          [on_success]
+    Validator -> Analyst       [on_fail, max_retries = 1]
+}

@@ -1,0 +1,181 @@
+# ══════════════════════════════════════════════════════════════
+# test_func.axon — prueba completa de programación funcional
+# ══════════════════════════════════════════════════════════════
+
+flow FuncTest {
+    version = "1.0"
+    input   = "test"
+    debug   = false
+}
+
+# ── Función básica ───────────────────────────────────────────
+func greet(name) {
+    return f"Hola {name}!"
+}
+
+# ── Recursión ────────────────────────────────────────────────
+func power(base, exp) {
+    if exp == 0 { return 1 }
+    return base * power(base, exp - 1)
+}
+
+# ── Función de orden superior ────────────────────────────────
+func map_fn(fn, data) {
+    result = []
+    for item in data {
+        result.append(fn(item))
+    }
+    return result
+}
+
+# ── Closure ──────────────────────────────────────────────────
+func prefixer(prefix) {
+    func _inner(text) {
+        return f"{prefix}: {text}"
+    }
+    return _inner
+}
+
+# ── Función con efectos secundarios ─────────────────────────
+func save_and_return(text, path) {
+    file->write(path, text)
+    return text
+}
+
+# ── Función privada — no importable ─────────────────────────
+func _clamp(n, min_val, max_val) {
+    if n < min_val { return min_val }
+    if n > max_val { return max_val }
+    return n
+}
+
+# ── Función que retorna función ──────────────────────────────
+func multiplier(factor) {
+    func _mul(n) {
+        return n * factor
+    }
+    return _mul
+}
+
+# ── Función anidada con scope del padre ─────────────────────
+func outer(x) {
+    factor = 3
+    func inner(y) {
+        return y * factor
+    }
+    return inner(x) + x
+}
+
+main {
+    print("══════════════════════════════")
+    print("  AXON — PROGRAMACIÓN FUNCIONAL")
+    print("══════════════════════════════")
+    print("")
+
+    # ── Función básica ───────────────────────────────────────
+    print("── 1. FUNCIÓN BÁSICA ──")
+    print(greet("Axon"))
+    print(greet("mundo"))
+    print("")
+
+    # ── Recursión ────────────────────────────────────────────
+    print("── 2. RECURSIÓN ──")
+    print("2^10 =", power(2, 10))
+    print("3^5  =", power(3, 5))
+    print("5^0  =", power(5, 0))
+    print("")
+
+    # ── Función como valor ───────────────────────────────────
+    print("── 3. FUNCIÓN COMO VALOR ──")
+    fn = power
+    print("fn(2,8) =", fn(2, 8))
+    print("typeof fn:", typeof(fn))
+    print("")
+
+    # ── Función anónima asignada ─────────────────────────────
+    print("── 4. FUNCIÓN ANÓNIMA ──")
+    shout   = func(text) { return text.upper() }
+    whisper = func(text) { shell { python -c "print(2**2)" } return text.lower() }
+    print(shout("hello axon"))
+    print(whisper("HELLO AXON"))
+    print("")
+
+    # ── Arrow syntax ─────────────────────────────────────────
+    print("── 5. ARROW SYNTAX ──")
+    double  = (n) => n * 2
+    square  = (n) => n * n
+    negate  = (n) => n * -1
+    print("double(7) = ",  double(7))
+    print("square(5) = ",  square(5))
+    print("negate(3) = ",  negate(3))
+    print("")
+
+    # ── Orden superior ───────────────────────────────────────
+    print("── 6. ORDEN SUPERIOR (map_fn) ──")
+    words   = ["hello", "world", "axon"]
+    nums    = [1, 2, 3, 4, 5]
+
+    shouted  = map_fn(func(s) { return s.upper() }, words)
+    doubled  = map_fn((n) => n * 2, nums)
+    squared  = map_fn(square, nums)
+
+    print("shouted:", shouted)
+    print("doubled:", doubled)
+    print("squared:", squared)
+    print("")
+
+    # ── Closure ──────────────────────────────────────────────
+    print("── 7. CLOSURES ──")
+    info_log  = prefixer("INFO")
+    warn_log  = prefixer("WARN")
+    error_log = prefixer("ERROR")
+
+    print(info_log("runtime iniciado"))
+    print(warn_log("memoria alta"))
+    print(error_log("conexion perdida"))
+    print("")
+
+    # ── Función que retorna función ──────────────────────────
+    print("── 8. FUNCIÓN QUE RETORNA FUNCIÓN ──")
+    triple   = multiplier(3)
+    by_ten   = multiplier(10)
+
+    print("triple(5)  =", triple(5))
+    print("by_ten(7)  =", by_ten(7))
+    print("multiplier(4)(6) =", multiplier(4)(6))
+    print("")
+
+    # ── Función anidada con scope ────────────────────────────
+    print("── 9. FUNCIÓN ANIDADA ──")
+    print("outer(5) =", outer(5))
+    print("outer(10) =", outer(10))
+    print("")
+
+    # ── Composición de funciones ─────────────────────────────
+    print("── 10. COMPOSICIÓN ──")
+    add_excl = func(s) { return s + "!" }
+    pipeline = map_fn(
+        func(s) { return add_excl(shout(s)) },
+        words
+    )
+    print("pipeline:", pipeline)
+    print("")
+
+    # ── Función privada (usable en el mismo archivo) ─────────
+    print("── 11. FUNCIÓN PRIVADA ──")
+    score = 1.8
+    clamped = _clamp(score, 0.0, 1.0)
+    print(f"_clamp({score}, 0, 1) =", clamped)
+    print("(no importable desde otros archivos)")
+    print("")
+
+    # ── Efectos secundarios ──────────────────────────────────
+    print("── 12. EFECTOS SECUNDARIOS ──")
+    saved = save_and_return("contenido de prueba", "tmp/func_test_output.txt")
+    print("guardado y retornado:", saved)
+    print("")
+
+    print("══════════════════════════════")
+    print("  DONE")
+    print("══════════════════════════════")
+}

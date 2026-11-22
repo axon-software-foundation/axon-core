@@ -43,6 +43,7 @@
 build/
 Build/
 build-*/
+axon/
 
 # CMake generated files
 CMakeFiles/
@@ -51,6 +52,7 @@ cmake_install.cmake
 Makefile
 install_manifest.txt
 compile_commands.json
+axon/
 
 # Temporary files
 *.tmp
@@ -67,3 +69,14 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+.idea/
+tmp/
+# Local validation and release artifacts
+/build-validation/
+/build-alpha/
+/dist/
+
+# Container and community validation outputs
+/build-linux/
+/dist-docker/

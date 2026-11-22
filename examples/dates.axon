@@ -1,0 +1,25 @@
+main {
+
+    now  = date->now()                    # "2026-07-05"
+    ts   = date->timestamp()              # "2026-07-05T14:32:10"
+    unix = date->unix()                   # 1751723530
+
+    print(now, "\n", ts, "\n", unix, "\n")
+
+    fmt  = date->format(now, "DD/MM/YYYY") # "05/07/2026"
+    parts = date->parse(now)               # {year, month, day, ...}
+
+    print(fmt, "\n", parts, "\n")
+
+    tomorrow  = date->add(now, 1, "days")
+    last_week = date->sub(now, 7, "days")
+    diff      = date->diff("2026-01-01", now, "days")  # 185.0
+
+    print(tomorrow, "\n", last_week, "\n", diff, "\n")
+
+    before = date->before("2025-01-01", now)  # true
+    after = date->after(now, "2025-01-01")   # true
+
+    print(before, "\n", after)
+
+}

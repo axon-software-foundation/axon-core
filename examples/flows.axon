@@ -1,0 +1,35 @@
+# Multiple flow configurations with explicit calls to implemented agents.
+# No LLM is called: the agents use their main blocks.
+# Automatic Flow->run(...) and agent ownership remain roadmap features.
+flow Research {
+    input = "axon"
+    debug = false
+}
+agent Fetcher {
+    provider ollama
+    model llama3.2
+    main { return __input__.upper() }
+}
+flow Validation {
+    input = "fallback"
+    debug = false
+}
+agent Validator {
+    provider ollama
+    model llama3.2
+    main { return __input__ + " validated" }
+}
+main {
+    # Keep these values visible if a platform/build produces a different result.
+    print("Research.input=[", Research.input, "] type=", typeof(Research.input))
+    print("Validation.input=[", Validation.input, "] type=", typeof(Validation.input))
+    fetched = Fetcher(Research.input)
+    print("fetched=[", fetched, "] type=", typeof(fetched), " length=", fetched.length())
+    result = Validator(fetched)
+    print("result=[", result, "] type=", typeof(result), " length=", result.length())
+    if Research.input != "axon" { raise "Research.input must be axon" }
+    if Validation.input != "fallback" { raise "Validation.input must be fallback" }
+    if fetched != "AXON" { raise "Fetcher must return AXON; see fetched above" }
+    if result != "AXON validated" { raise "Validator must return AXON validated; see result above" }
+    print("PASS flows")
+}

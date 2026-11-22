@@ -1,0 +1,28 @@
+# main.axon — versión debug
+import "./extractor.axon"
+import "./analyzer.axon"
+
+flow Pipeline {
+    version = "1.0"
+    input   = "texto de prueba"
+    debug   = true        # ← activar debug para ver todo
+}
+/*
+agent Cleaner {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.1
+    transport   rest
+    endpoint    "localhost:11434"
+
+    task Clean {
+        input = flow.input
+        prompts = ["Saludame"]
+    }
+}
+*/
+main {
+    r = Cleaner->Clean(flow.input)
+    print("r: ", r)
+    print("tipo: ", typeof(r))
+}

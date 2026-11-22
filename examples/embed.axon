@@ -1,0 +1,26 @@
+embedding DocMemory {
+    provider = "ollama"
+    model    = "nomic-embed-text"   # ollama pull nomic-embed-text
+    endpoint = "http://localhost:11434"
+    dim      = 768
+}
+
+main {
+/*
+    memory->index("texto del documento", "metadata_opcional")
+    memory->index("nombres de perros", "metadata_opcional")
+    memory->index("cantidad de planetas", "planetas")
+    memory->index("cantidad de frutas", "frutas")
+*/
+    memory->sem_load("tmp/persist/docs.idx")
+
+    results = memory->search("cantidad de planet", 2)
+    print("Hay indices: " + results)
+
+    for r in results {
+        print(r["text"], " ", r["score"])
+    }
+    # memory->sem_persist("tmp/persist/docs.idx")
+
+    print("docs en indice: ", memory->sem_size())
+}

@@ -1,0 +1,346 @@
+# axon_complete.axon - Validacion completa Phase 1 -> Phase 3A
+# Cubre: flow, storage, agent, memory, validation, tasks,
+# main{}, Agent->Task(), >>, parallel, if/else, for, while,
+# match, try/catch, print, file->, memory->, shell{}
+
+import session
+import memory
+
+/* -- Flow ------------------------------------------------------ */
+flow Validation {
+    version   = "complete-3a"
+    telemetry = true
+    input     = "you know about python?"
+
+    output {
+        format  = structured
+        level   = info
+        target  = stdout
+        metrics = true
+    }
+}
+
+/* -- Storage nombrado ------------------------------------------ */
+storage LocalDB {
+    type = "sqlite"
+    path = "./data/validation.db"
+}
+
+storage CacheDB {
+    type = "duckdb"
+    path = "./data/cache.duckdb"
+}
+
+/* -- Agentes -- definiciones puras ----------------------------- */
+agent Processor {
+    provider    ollama
+    model       llama3.2
+    transport   rest
+    endpoint    "localhost:11434"
+    temperature = 0.7
+
+    memory {
+        runtime  = enabled
+        session  = enabled
+        semantic = disabled
+    }
+
+    validation {
+        confidence  > 0.
+        format      = text
+        max_retries = 1
+        on_fail     = skip
+    }
+
+    task Analyze {
+        input   = __input__
+        output  = text
+        prompts = ["Analyze this input and respond with one sentence. and give 3 keywords from python language, like if, while, for"]
+    }
+
+    task Summarize {
+        input   = Analyze
+        output  = text
+        prompts = ["take the 3 last keywords and talk about these a short sentence", "Write all in markdown to download then"] # ,"Summarize in 10 words or less."]
+    }
+}
+
+agent Reviewer {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.3
+
+    validation {
+        confidence  > 0.0
+        max_retries = 1
+        on_fail     = flag
+    }
+
+    task Review {
+        input   = __input__
+        output  = text
+        prompts = ["Review and approve or reject this content."]
+    }
+}
+
+agent Logger {
+    provider ollama
+    model    llama3.2
+
+    task Record {
+        input  = __input__
+        output = text
+        prompts = ["Log this event."]
+    }
+}
+
+/* ==============================================================
+   main {} -- unico punto de control
+   ============================================================== */
+main {
+
+    /* -- 1. Variables y aritmetica --------------------------- */
+    x     = 10
+    y     = 3
+    sum   = x + y
+    prod  = x * y
+    frac  = x / 4
+    label = "score=" + sum
+    print("[1] arithmetic:", sum, prod, frac, label)
+
+
+    /* -- 2. Strings ------------------------------------------ */
+    greeting = "hello " + "axon " + "v3a"
+    empty    = ""
+    print("[2] strings:", greeting)
+    print("[2] isempty:", empty.isempty(), greeting.isempty())
+    print("[2] length:", greeting.length())
+
+
+    /* -- 3. Listas y for ------------------------------------- */
+    phases = ["phase1", "phase2a", "phase2b", "phase2c", "phase2d", "phase3a"]
+    trace  = ""
+    for p in phases {
+        trace = trace + p + " "
+    }
+    print("[3] phases:", trace)
+    print("[3] list[0]:", phases[0])
+    print("[3] list[5]:", phases[5])
+    numbers = [1,2,3,4,5,10] # TODO: hay que aceptar f-strings, ademas de funciones para listas tipo python
+    i = 1
+    /*
+    output = []
+    for n in numbers {
+        resu = "5 x", n, "=", 5*n, "\t -->  ", i)
+        print(resu)
+        i = i + 1
+        output.append(f"5 x {n} = {5*n} \t --> {i}")
+    }
+    print(output)
+    */
+
+
+    /* -- 4. while -------------------------------------------- */
+    counter = 0 # TODO: lo mismo que las listas pero usando while
+    total   = 0
+    while counter < 5 {
+        total   = total + counter
+        counter = counter + 1
+    }
+    print("[4] while sum 0..4:", total)
+
+
+    /* -- 5. if / else ---------------------------------------- */
+    score = 0.85 # TODO: aceptar operadores logicos, ademas las palabras clave como else if
+    if score >= 0.8 { # && score < 9 {
+        tier = "high"
+    } else {
+        if score >= 0.5 {
+            tier = "medium"
+        } else {
+            tier = "low"
+        }
+    }
+    print("[5] tier:", tier)
+
+
+    /* -- 6. match -------------------------------------------- */
+    status = "approved"
+    match status {
+        "approved" -> { verdict = "OK approved"}
+        "rejected" -> { verdict = "FAIL rejected" }
+        _          -> { verdict = "? unknown"   }
+    }
+    print("[6] match:", verdict)
+
+
+    /* -- 7. try / catch -------------------------------------- */
+    try {
+        if total < 0 {
+            raise "NegativeError: total cannot be negative"
+        }
+        caught = "no error"
+    } catch err {
+        caught = err # "caught: " + err
+    }
+    print("[7] try/catch:", caught)
+
+    try {
+        raise "TestError: deliberate raise"
+    } catch err {
+        print("[7] caught raise:", err)
+    }
+
+
+    /* -- 8. Bool y null -------------------------------------- */
+    t = true
+    f = false
+    n = null
+    print("[8] bool:", t, f)
+    print("[8] null:", n)
+    print("[8] and:", t and f)
+    print("[8] or:", t or f)
+    print("[8] not:", not t)
+
+
+    /* -- 9. file->read / write / append / exists ------------- */
+    file->write("tmp/axon_val_test.txt", "line1\nline2\nline3\n") # TODO: crear funcion elminar, ademas validar el manejo de directios??
+    file->append("tmp/axon_val_test.txt", "line4\n")
+    content = file->read("tmp/axon_val_test.txt")
+    exists  = file->exists("tmp/axon_val_test.txt")
+    missing = file->exists("tmp/does_not_exist.txt")
+    print("[9] file write+read:", content.length(), "bytes")
+    print("[9] file exists:", exists)
+    print("[9] missing file:", missing)
+
+
+    /* -- 10. shell { } interop ------------------------------- */
+    shell { echo "SHELL_INTEROP_OK" }
+    shell {
+        python -c "import numpy as np;print('hola desde python YOLO ', np.zeros(10))"
+    }
+    sh_out  = shell.stdout
+    sh_code = shell.exitcode
+    print("[10] shell stdout:", sh_out)
+    print("[10] shell exitcode:", sh_code)
+
+    /* Shell escribiendo a archivo */
+    shell { echo "from_shell" > tmp/axon_shell_out.txt }
+    from_sh = file->read("tmp/axon_shell_out.txt")
+    print("[10] shell to file:", from_sh)
+
+
+    /* -- 11. memory -- volatile (runtime) --------------------- */ # TODO: revisar su funcionamiento
+    memory->store("user",  "dario")
+    memory->store("score", "0.92")
+    memory->store("tags",  "ai,llm,axon")
+
+    u = memory->get("user")
+    s = memory->get("score")
+    print("[11] memory get:", u, s)
+    print("[11] memory has:", memory->has("user"))
+    print("[11] memory missing:", memory->has("__none__"))
+    print("[11] memory size:", memory->size())
+    print("[11] memory keys count:", memory->size())
+
+    memory->remove("tags")
+    print("[11] after remove:", memory->size())
+
+
+    /* -- 12. memory -- session scope -------------------------- */ # TODO: revisar su funcionamiento
+    memory->store("conv_turn_1", "user: hello", "session")
+    memory->store("conv_turn_2", "agent: hi!", "session")
+    t1 = memory->get("conv_turn_1", "session")
+    t2 = memory->get("conv_turn_2", "session")
+    print("[12] session mem:", t1, "|", t2)
+    print("[12] session size:", memory->size("session"))
+
+
+    /* -- 13. memory -- shared scope (cross-agent) ------------- */ # TODO: revisar su funcionamiento
+    memory->store("pipeline_state", "running", "shared")
+    memory->store("agent_count",    "3",        "shared")
+    ps = memory->get("pipeline_state", "shared")
+    ac = memory->get("agent_count",    "shared")
+    print("[13] shared mem:", ps, ac)
+
+
+    /* -- 14. memory -- persistent (disco) -------------------- */ # TODO: revisar su funcionamiento
+    memory->store("model_version",  "llama3-v1", "persistent")
+    memory->store("last_run",       "2025",       "persistent")
+    memory->store("total_tokens",   "48291",      "persistent")
+
+    ok = memory->persist("/tmp/axon_persist.bin")
+    print("[14] persist ok:", ok)
+    print("[14] persistent size:", memory->size("persistent"))
+
+    /* Simular reinicio: clear + reload */
+    memory->clear("persistent")
+    print("[14] after clear:", memory->size("persistent"))
+
+    loaded = memory->load("/tmp/axon_persist.bin")
+    print("[14] load ok:", loaded)
+    print("[14] after load:", memory->size("persistent"))
+    print("[14] model_version:", memory->get("model_version", "persistent"))
+    print("[14] total_tokens:", memory->get("total_tokens", "persistent"))
+
+    /* Limpieza de la persistencia */
+    memory->clear("persistent")
+
+
+    /* -- 15. memory -- TTL (expiry) --------------------------- */ # TODO: revisar su funcionamiento
+    memory->store("temp", "expires_soon", "runtime", 3)
+    print("[15] ttl key present:", memory->has("temp"))
+    memory->remove("temp")
+
+
+    /* -- 16. Agent->Task(input) y acceso AgentName.TaskName -- */
+    analysis = Processor->Analyze(flow.input)
+    print("[16] Processor->Analyze:", analysis)
+    print("[16] via .output:", Processor.Analyze)
+
+    summary = Processor->Summarize(Processor.Analyze) # (flow.input)
+    print("[16] Processor->Summarize:", summary)
+
+
+    /* -- 17. Agent() llamada completa ------------------------ */ # TODO: revisar por que no funciona bien
+    proc_result = Processor(flow.input)
+    print("[17] Processor():", proc_result)
+
+
+    /* -- 18. >> pipeline ------------------------------------- */
+    pipe_result = flow.input >> Processor >> Reviewer
+    print("[18] pipeline >>:", pipe_result)
+
+
+    /* -- 19. parallel {} ------------------------------------- */
+    parallel {
+        pa = Processor->Analyze(flow.input)
+        pb = Reviewer->Review(flow.input)
+        pc = Logger->Record(flow.input)
+    }
+    print("[19] parallel a:", pa)
+    print("[19] parallel b:", pb)
+    print("[19] parallel c:", pc)
+
+
+    /* -- 20. Guardar resultado final a archivo --------------- */
+    report = "=== AXON VALIDATION REPORT ===\n"
+    report = report + "flow.input: " + flow.input + "\n"
+    report = report + "arithmetic: " + sum + "\n"
+    report = report + "tier: " + tier + "\n"
+    report = report + "verdict: " + verdict + "\n"
+    report = report + "analysis: " + analysis + "\n"
+    report = report + "summary: " + summary + "\n"
+    report = report + "memory_user: " + u + "\n"
+    report = report + "phases_run: " + trace + "\n"
+    report = report + "=== END REPORT ===\n"
+
+    file->write("tmp/axon_validation_report.txt", report)
+
+    file->write("tmp/yolo.txt", "holaaaaa")
+    print("[20] report saved to: tmp/axon_validation_report.txt")
+    print("[20] report size:", report.length(), "chars")
+
+    print("")
+    print("OK ALL FEATURES VALIDATED -- Phase 1 through Phase 3A")
+}

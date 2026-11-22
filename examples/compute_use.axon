@@ -1,0 +1,83 @@
+flow Orch {
+    version     = "complete"
+    telemetry   = true
+    debug       = false     # false = silencioso (default en producción)
+                            # true  = muestra conexiones, skips, warnings
+    input       = "Hacer cada una de las tareas asignadas"
+
+    output {
+        level   = info
+        target  = stdout
+        metrics = true
+    }
+}
+
+agent Processor {
+    provider    ollama
+    model       llama3.2
+    transport   rest
+    endpoint    "localhost:11434"
+    temperature = 0.2
+
+    # ── Memoria y tokens ─────────────────────────────
+    max_tokens = 2048     # cuántos tokens genera (respuesta)
+    num_ctx    = 4096     # ventana de contexto (lo que procesa)
+
+    # ── GPU / CPU ────────────────────────────────────
+    # num_gpu    = -1       # -1 = todo en GPU (default)
+                            #  0 = solo CPU
+                            #  N = N capas en GPU (resto en CPU/RAM)
+    # num_thread = 8        #  hilos CPU (útil con num_gpu = 0)
+    # main_gpu   = 1        #  GPU a usar si tienes varias (0, 1, 2...)
+
+    # ── Rendimiento ──────────────────────────────────
+    # num_batch  = 512       # batch de procesamiento de prompt
+    # f16_kv     = true      # float16 para KV cache (menos VRAM, misma calidad)
+    # low_vram   = false     # modo low VRAM (más lento, cabe en menos)
+
+    #######
+    # OPCIONES PROBADAS REALES EN LOCAL (16 ram - intel Core (TM) 7 240H - GPU Nvidia 16GB - GPU interna Intel graphics 8GB)
+    #######
+    # OPCIÓN A — GPU con contexto reducido (más estable)
+    num_gpu    = -1         # todo en GPU
+    num_ctx    = 4096       # REDUCIR esto — principal culpable
+    num_batch  = 256        # reducir también
+    f16_kv     = true       # float16 usa la mitad de VRAM que float32
+    gpu_fallback  = true    # si GPU falla, reintenta en CPU automáticamente
+
+    # OPCIÓN B — GPU parcial + CPU para el resto (híbrido)
+    # num_gpu    = 20       # N capas en GPU, resto en CPU/RAM
+    # num_ctx    = 8192     # puedes subir más
+
+    # OPCIÓN C — CPU puro (lento pero estable)
+    # num_gpu    = 0
+    # num_thread = 8
+    # num_ctx    = 32768    # con CPU puedes usar más contexto
+
+    task Saludar {
+        input       = flow.input    # [flow.input | __input__ | Agent->Task]
+        prompts     = [
+            "Primero quiero que saludes",
+            "Luego quiero que me hables sobre una fruta cualquiera"
+        ]
+    }
+
+    task Comment {
+        input       = Saludar.output
+        prompts     = ["Quiero 3 caracteristicas de esta fruta, las que tu quieras"]
+    }
+
+    task_graph {
+        Saludar -> Comment [on_failed]
+        Comment -> done [on_success]
+    }
+
+}
+
+main {
+    # Probando el Agente completo sin task_grapg
+    res = Processor()
+
+    # res=Processor->Saludar(flow.input) # TODO: probar que si funcione usando output = text
+    print(res)
+}

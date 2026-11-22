@@ -1,0 +1,72 @@
+flow PDFTest {
+    version = "1.0"
+    input   = "test pdf features"
+    debug   = false
+}
+
+main {
+
+    pdf_path = "tmp/data/CV_Dario_Sotelo_E.pdf"
+
+    print("=== 1. TEXTO PLANO ===")
+    text = file->read(pdf_path)
+
+    print("=== 2. PARSE COMPLETO ===")
+    pdf = pdf->parse(pdf_path, "s")
+    print("paginas:", pdf["pages"])
+    print("imagenes encontradas:", pdf["images"].size())
+
+    r = pdf['pages_content'][4]['text']
+    w = r.replace("\n", "")
+    print("COTNEIDO: ", w)
+
+    file->write("pagina_1.txt", w)
+
+    print("=== 3. TEXTO POR PAGINA ===")
+    for pg in pdf["pages_content"] {
+        print("--- pagina", pg["number"], " ---")
+        # print(pg["text"])
+    }
+
+    print("=== 4. IMAGENES ===")
+    for img in pdf["images"] {
+        print("imagen", img["index"],
+              "| formato:", img["format"],
+              "| pagina:", img["page"],
+              "| size:", img["width"], "x", img["height"])
+
+        path = f'tmp/output/img_{img["index"]}.{img["format"]}'
+        ok   = image->save(path, img["data"])
+        print("  guardada:", path, "->", ok)
+
+        small   = image->resize(img["data"], 256, 256)
+        path_sm = f'tmp/output/img_{img["index"]}_small.jpg'
+        image->save(path_sm, small)
+        print("  resized:", path_sm)
+    }
+
+    print("=== 5. OPERACIONES DE TEXTO ===")
+    full   = pdf["text"]
+    print("longitud: ", full.length(), " chars")
+
+    emails = full.find_all("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
+    print("emails: ", emails.size())
+    for e in emails { print(" - ", e) }
+
+    phones = full.find_all("[+]?[0-9]{7,15}")
+    print("telefonos: ", phones.size())
+    for p in phones { print(" - ", p) }
+
+    print("=== 6. HASH ===")
+    print("sha256:", hash->sha256(full))
+    print("md5:", hash->md5(full))
+
+    print("=== 7. EXPORTAR ===")
+    file->write("tmp/pdf_text.txt", full)
+    result = {}
+    result["text"]   = full
+    result["pages"]  = pdf["pages"]
+    result["sha256"] = hash->sha256(full)
+    json->write("tmp/pdf_result.json", result, 2)
+    print("done")
+}

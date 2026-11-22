@@ -1,0 +1,20 @@
+# No LLM required: a third task must read the first task, not the previous one.
+flow Demo { input = "FLOW_DEFAULT" debug = false }
+agent Processor {
+    task First { input = __input__ }
+    task Middle { input = "MIDDLE_VALUE" }
+    task Last { input = First.output }
+}
+main {
+    full = Processor("AGENT_ARGUMENT")
+    single = Processor->First("TASK_ARGUMENT")
+    piped = "PIPELINE_ARGUMENT" >> Processor
+    if full != "AGENT_ARGUMENT" { raise "agent input was lost" }
+    if single != "TASK_ARGUMENT" { raise "specific task input was lost" }
+    if piped != "PIPELINE_ARGUMENT" { raise "pipeline input was lost" }
+    if Processor.Last != "PIPELINE_ARGUMENT" { raise "published task output is incorrect" }
+    print("agent: ", full)
+    print("task: ", single)
+    print("pipeline: ", piped)
+    print("PASS tasks")
+}

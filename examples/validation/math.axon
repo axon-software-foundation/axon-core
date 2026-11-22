@@ -1,0 +1,16 @@
+# Public functions are importable; _offset remains internal to this file.
+
+func _offset(n) { return n + 1 }
+
+func add(a, b) { return a + b }
+
+func adjusted(n) { return _offset(n) }
+
+func factorial(n) {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}
+
+func multiplier(factor) {
+    return (n) => factor * n
+}

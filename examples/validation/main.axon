@@ -1,0 +1,22 @@
+# Bare path, normalized duplicate, nested import, private helper and native modules.
+import "math.axon"
+import "./nested/../math.axon"
+import "./nested/format.axon"
+
+main {
+    if add(20, 22) != 42 { raise "public import failed" }
+    if adjusted(41) != 42 { raise "private helper inside module failed" }
+    if format_result(41) != "result=42" { raise "nested import failed" }
+    if codec->b64_decode(codec->b64_encode("Axon")) != "Axon" {
+        raise "base64 roundtrip failed"
+    }
+    digest = hash->sha256("abc")
+    if digest != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
+        raise "sha256 failed"
+    }
+    text = "Hello 123"
+    if text.find("123") != 6 { raise "literal string.find failed" }
+    print(format_result(41))
+    print("sha256:", digest)
+    print("PASS imports")
+}

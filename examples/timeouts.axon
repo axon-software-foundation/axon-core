@@ -1,0 +1,46 @@
+flow Research {
+    input       = "Tu debes es contestar cada uno de los inputs"
+    delay       = 1.0      # 1s después de que el flow termina
+    timeout     = 60       # 60s máximo total (pendiente implementar)
+}
+
+agent Processor {
+    provider ollama
+    model    llama3.2
+    delay    = 0.5     # 500ms después de que el agente termina
+
+    num_gpu         = -1         # todo en GPU
+    num_ctx         = 4096       # REDUCIR esto — principal culpable
+    num_batch       = 256        # reducir también
+    f16_kv          = true       # float16 usa la mitad de VRAM que float32
+    gpu_fallback    = true       # si GPU falla, reintenta en CPU automáticamente
+
+    task Analyze {
+        input       = __input__
+        delay       = 4   # 200ms después de esta task
+        prompt      = ["Escoge solo una 1 fruta entre banano, manzana y mandarina, y dime lo mas importante de la que escogiste"]
+    }
+    task Summarize {
+        input       = Analyze.output
+        delay       = 0.1
+        prompt      = ["Quiero que me digas 3 caracteristicas de la fruta que escogiste"]
+    }
+}
+
+main {
+    sleep(1)      # 1 segundo
+    sleep(0.5)    # 500ms
+    sleep(0.1)    # 100ms
+
+    r = Processor(flow.input)
+    print(r)
+
+
+        print("Analyze: ", Processor.Analyze)
+        print("Summarize: ", Processor.Summarize)
+        print("Resultado final: ", r)
+
+
+    # task Analyze corre → espera 200ms → task Summarize corre → espera 100ms
+    # agente termina → espera 500ms → retorna
+}

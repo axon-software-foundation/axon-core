@@ -1,0 +1,49 @@
+# ── main.axon ────────────────────────────────────────────────
+import "./extractor.axon"
+import "./analyzer.axon"
+
+flow Pipeline {
+    version = "1.0"
+    input   = "Axon es un lenguaje de orquestacion de agentes LLM"
+    debug   = true
+
+    output {
+        level   = info
+        target  = stdout
+        metrics = true
+    }
+}
+
+main {
+    print("=== PIPELINE MULTI-FLOW ===")
+    print("flow activo:", flow.name)
+    print("")
+
+    # Prueba con functions
+    saludar("Dario")
+
+    # Acceso cross-flow
+    print("=== INPUTS DE CADA FLOW ===")
+    print("Extractor.input: ", Extractor.input)
+    print("Analyzer.input: ", Analyzer.input)
+    print("Pipeline.input: ", Pipeline.input)
+    print("")
+
+    # Chaining: pasar output de un agente al siguiente
+    print("=== EJECUTANDO PIPELINE ===")
+    texto_raw = flow.input
+
+    # Paso 1: extraer
+    extraido = Cleaner->Clean(texto_raw)
+    print("\t\textraido: ", extraido)
+
+    # Paso 2: analizar
+    analizado = Scorer->Score(extraido)
+    print("\t\tanalizado: ", analizado)
+
+    # Paso 3: resultado final
+    print("")
+    print("=== RESULTADO FINAL ===")
+    resultado = f"Procesado por {flow.name}: {analizado}"
+    print(resultado)
+}

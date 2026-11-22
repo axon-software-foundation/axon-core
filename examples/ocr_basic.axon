@@ -1,0 +1,25 @@
+main {
+
+    # Verificar instalación
+    ok = ocr->installed()          # true/false
+    print(ok)
+
+    # Ver idiomas disponibles
+    langs = ocr->languages()       # ["eng", "spa", ...]
+
+    # Leer texto de imagen
+    text = ocr->read("tmp/data/img_text.jpg")
+    # print(text)
+    text = ocr->read("tmp/data/img_text.jpg", "spa")   # con idioma
+    print(text)
+
+/*
+    # PDF escaneado → texto
+    pdf = pdf->parse("./scan.pdf", "i")
+    image->save("./tmp.jpg", pdf["images"][0]["data"])
+    text = ocr->read("./tmp.jpg", "spa")
+*/
+
+    cadena = "Hola como estas hoy?"
+    print(cadena[0])
+}

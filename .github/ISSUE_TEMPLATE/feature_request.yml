@@ -1,0 +1,22 @@
+name: Feature proposal / Propuesta
+description: Explain the use case before proposing an implementation.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish? Spanish and English are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Proposed behavior and example
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and roadmap overlap
+      description: Link any related issue or roadmap item. A proposal is not an implementation commitment.

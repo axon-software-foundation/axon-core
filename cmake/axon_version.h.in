@@ -1,0 +1,3 @@
+#pragma once
+#define AXON_VERSION "@AXON_VERSION@"
+#define AXON_PHASE "@AXON_CHANNEL@"
