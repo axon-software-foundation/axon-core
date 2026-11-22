@@ -2,35 +2,34 @@
 
 ## [Unreleased]
 
-- CI y herramientas de comunidad preparados para validación en el repo oficial.
-- Ruta Docker Linux actualizada; ejecución en Docker pendiente de CI.
+- Replace outdated language claims with English references tied to the current interpreter and tests.
+- Add CTest checks of actual README/language/module Markdown examples: execution for self-contained
+  programs, syntax-only for examples requiring a model service.
+- Keep one root MIT `LICENSE`; update installation, portable packaging and third-party references.
+- Include current language/module references in portable archives.
 
-## [0.4.0-alpha.1] — candidato, todavía sin publicar
+## [0.4.0-alpha.1] — release candidate
 
-### Cambios incluidos
+This heading records candidate scope; it does not establish a published tag or release.
 
-- Fuente única VERSION para CLI, CMake y nombres de archivos comprimidos.
-- Funciones, imports relativos/canónicos y diagnósticos CLI con códigos de salida.
-- Paso de input/resultados entre tasks, referencias explícitas y aislamiento
-  entre invocaciones; agente completo, task específica y pipeline.
-- Delays posteriores de task/agente/flow y manejo controlado de raise sin abort.
-- Corrección de la señal de apagado del scheduler y prueba de regresión.
-- Limpieza de advertencias propias y comprobación estricta del build.
-- Windows x64 portable con runtime MinGW estático, avisos, hashes y pruebas
-  automáticas del archivo extraído.
+### Included
 
-### Validación disponible
+- One `VERSION` source for CLI, CMake and archive names.
+- Functions/closures, canonical relative imports, diagnostics and CLI exit codes.
+- Whole-agent, individual-task and pipeline calls; task input/output references and invocation isolation.
+- Task/agent/flow post-delays and controlled uncaught-raise handling.
+- Scheduler shutdown synchronization fix and waiting-worker regression.
+- Strict warning builds, Linux fortified-header OCR checks, explicit graph-test aggregate initialization
+  and C++-only Apple libc++ flags.
+- Windows x64 static MinGW portable packaging, notices, checksums and extracted-package smoke tests.
+- CI for Linux, Windows, experimental macOS and Docker; contribution/security/report templates.
 
-- Windows: GCC 16.2, Release sin warnings con -Werror, 22/22 CTest y portable
-  extraído. Darío confirmó ejecución correcta en otro Windows.
-- Linux: GCC 14.2, Release sin warnings, 22/22 CTest y archivo nativo extraído;
-  no certifica portabilidad entre distribuciones.
-- Suites: 31 casos runtime y 78 del intérprete. Encadenamiento real con Ollama
-  comprobado manualmente en Windows en la etapa anterior.
+### Evidence and limits
 
-### Límites
-
-HTTP/REST, MCP, timeouts efectivos, concurrencia real de parallel y otros
-frentes siguen pendientes en el roadmap. macOS no tiene paquete validado.
-No se incluyen modelos, Ollama ni Tesseract. Firma de código pendiente.
-No hay todavía una GitHub release ni una imagen Docker publicada.
+The public-main baseline `7a1537f` passed all six Axon CI jobs, including the experimental macOS job.
+Baseline suites contained 31 runtime cases, 78 interpreter cases and 22 CTest entries.
+Windows portable execution and live Ollama task chaining were separately confirmed manually.
+New Markdown checks are listed under Unreleased until reviewed and merged.
+Linux archives have no declared cross-distribution ABI baseline. macOS has no package target.
+HTTP/REST, MCP, timeout enforcement, actual parallel language execution and additional providers
+remain pending. Model weights, Ollama and Tesseract are not bundled. Signing is pending.

@@ -1,39 +1,33 @@
-# 0.4.0-alpha.1 — candidato local, sin publicación
+# Axon 0.4.0-alpha.1 — prerelease candidate
 
-Primera preparación de un paquete portable de Core. La versión completa sale
-de VERSION y se refleja en CLI y nombres de archivos. Esta alpha admite cambios
-de sintaxis/API y no ofrece aún un contrato de compatibilidad estable.
+Draft notes for a future GitHub prerelease; this file does not establish publication.
+Alpha syntax/APIs may change and there is no stable compatibility guarantee yet.
 
-## Alcance validado de la base
+## Included
 
-- Funciones, imports relativos/canónicos, diagnósticos y códigos de salida.
-- Invocación de agente, task específica y pipeline; paso de input/resultados.
-- Referencias a resultados, aislamiento entre invocaciones y delays posteriores.
-- Apagado del scheduler corregido y regresión de arranque/apagado de workers.
-- Build estricto sin warnings, con AXON_WARNINGS_AS_ERRORS=ON.
-- 22 CTest, 31 casos runtime y 78 del intérprete confirmados en Windows y Linux.
-- Ejemplo real de encadenamiento con Ollama confirmado manualmente en Windows.
-- ZIP Windows extraído/ejecutado por el empaquetador y confirmado por Darío
-  en otro equipo Windows. El candidato local confirmado tenía SHA256
-  `ddfb7d7f8c64d9c4df7b410eb2e433ed278a308da53dc47ff438857aebcdf9ea`.
+Functions/closures and relative imports; controlled diagnostics and exit codes; whole-agent,
+individual-task and pipeline calls; task input/output references and invocation isolation;
+post-delays; scheduler shutdown fix; strict cross-platform warning fixes; Windows portable
+packaging with checksums and extracted execution checks.
 
-Este hash identifica ese archivo previo; no debe copiarse al .sha256 de un
-nuevo build. La CI y los cambios de metadatos de esta entrega requieren una
-nueva construcción desde el commit/tag aprobado y prueba de ese ZIP exacto.
-Los archivos preparados de CI/Docker no acreditan ejecuciones todavía no realizadas.
+The baseline CI passed Linux/Windows Debug and Release, experimental native macOS and Linux Docker.
+Selected Markdown examples are now checked directly by CTest. See [VALIDATION.md](VALIDATION.md)
+for what is executed versus syntax-only. Live Ollama task chaining was separately checked manually
+on Windows. A previous Windows portable also ran on a second machine; the final tag artifact still
+requires its own acceptance and checksum. Never copy a previous candidate's hash into new release assets.
 
-## Limitaciones conocidas
+## Known limitations
 
-- Windows x64: construcción portable inicial con MinGW GCC; portable confirmado por el autor en otro Windows. Sin instalador, firma de código ni actualización automática.
-- Linux: archivo de validación del host; compatibilidad entre distribuciones pendiente.
-- macOS y otras arquitecturas: paquetes pendientes de construcción y validación.
-- HTTP/REST y MCP pendientes; no se publicitan como módulos funcionales.
-- Timeouts/cancelación y concurrencia real de parallel pendientes.
-- Providers adicionales, multi-flow avanzado, RAG y mesh siguen el roadmap.
-- OCR/documentos/memoria y demás módulos requieren ampliar pruebas de integración.
-- Ollama, modelos y Tesseract no están incluidos.
+- Windows x64 uses MinGW GCC portable packaging; no installer, code signing or automatic updater.
+- Linux native archives have no established cross-distribution ABI baseline.
+- macOS CI is experimental/non-blocking; no macOS package, signing or architecture-wide support claim.
+- HTTP/REST and MCP are not public implemented modules. Storage/Whisper calls are stubs.
+- Timeouts/cancellation and actual parallel language execution are pending.
+- Additional providers, complete multi-flow ownership, automatic RAG, training and mesh remain roadmap work.
+- Document/image/OCR/semantic-memory integrations need expanded coverage; OCR temporary names collide
+  under concurrent execution. Key-value memory stores strings, not arbitrary typed objects.
+- Ollama, model weights and Tesseract are not included. Missing-provider passthrough is not LLM generation.
 
-Antes de publicar: consolidar el repositorio, revisar procedencia de terceros,
-ejecutar CI y aceptación del nuevo candidato Windows, activar el canal privado
-de seguridad y asociar binarios/checksums al mismo tag y commit.
-La web debe anunciar únicamente plataformas y descargas realmente disponibles.
+Before publishing, confirm the tag commit, trusted CI run, exact portable acceptance, notices/provenance,
+working private reporting channel and all asset checksums. In the final release description, list only
+assets actually attached and platforms actually tested. The website must link to those real downloads.

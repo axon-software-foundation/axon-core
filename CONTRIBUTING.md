@@ -1,15 +1,14 @@
-# Contribuir a Axon
+# Contributing to Axon
 
-Aceptamos contribuciones y reportes en español e inglés. Core está en alpha:
-revisa [el roadmap](docs/ROADMAP.md) y abre una propuesta antes de dedicar
-trabajo a sintaxis nueva, dependencias o cambios de arquitectura.
+English is the canonical documentation language; reports in English or Spanish are welcome.
+Axon Core is in alpha. Read the [roadmap](docs/ROADMAP.md) and open a proposal before investing
+in new syntax, dependencies or architectural changes.
 
-## Entorno y validación
+## Build and validation
 
-CMake >= 3.20, compilador C++17, Bash y Make/Ninja. En Windows usamos MSYS2
-UCRT64 GCC con Ninja. No hacen falta Ollama ni Tesseract para la suite básica.
-
-Git Bash en Windows, desde la raíz (ajusta C:/msys64 si corresponde):
+Use CMake 3.20+, a C++17 compiler, Bash and Make/Ninja. Windows uses MSYS2 UCRT64 GCC with Ninja.
+Ollama, Python and Tesseract are not required for the automated baseline.
+From the source root in Windows Git Bash (adjust the compiler paths if needed):
 
 ```bash
 bash scripts/validate.sh Debug -G Ninja \
@@ -18,50 +17,47 @@ bash scripts/validate.sh Debug -G Ninja \
   -DAXON_WARNINGS_AS_ERRORS=ON
 ```
 
-Linux, o macOS como plataforma todavía experimental:
+On Linux or experimental macOS:
 
 ```bash
 bash scripts/validate.sh Debug -DAXON_WARNINGS_AS_ERRORS=ON
 ```
 
-Repite con Release para cambios de ejecución, sincronización o empaquetado.
-La referencia actual es 22 casos CTest, 31 runtime y 78 del intérprete.
-Las cantidades pueden aumentar al añadir regresiones útiles. Los tests de
-modelo real son una comprobación adicional: ver examples/validation/ollama_tasks.axon.
+Repeat with Release for execution, synchronization or packaging changes. See
+[VALIDATION.md](docs/VALIDATION.md) for evidence and test boundaries. Model integration is a
+separate manual check: [ollama_tasks.axon](examples/validation/ollama_tasks.axon).
 
-## Qué incluir en un PR
+## Pull requests
 
-1. Una rama enfocada en un problema o comportamiento. Usa un fork si no tienes
-   acceso de escritura. Evita formatear archivos ajenos al cambio.
-2. Una explicación del problema y del comportamiento resultante, con ejemplo
-   mínimo cuando ayude a revisar el contrato del lenguaje.
-3. Una regresión para errores de ejecución y pruebas relevantes para funciones
-   nuevas; no cambies expectativas para ocultar un fallo.
-4. Comandos ejecutados y resultados, incluido el sistema/compiler usado.
-   Indica explícitamente las plataformas o servicios que no pudiste probar.
-5. Documentación y changelog si cambia el comportamiento público.
+1. Use a branch focused on one problem; fork the repository if you do not have write access.
+2. Explain the trigger and resulting behavior, with a minimal example where useful.
+3. Add relevant regression coverage for runtime bugs and new language behavior. Do not change
+   expectations to hide a failure. Test doubles belong in tests, not production implementations.
+4. Record commands, results, OS and compiler. Identify services/platforms you could not test.
+5. Update public documentation and the changelog when behavior changes.
 
-Conserva las formas de invocación de agente completo, task específica y
-pipeline. Cambios de input, resultados, imports y errores requieren cubrir
-el contrato existente. Una prueba con un provider simulado no reemplaza una
-implementación real; los dobles de prueba pertenecen a tests.
+Preserve full-agent, specific-task and pipeline invocation contracts. Changes to inputs, outputs,
+imports and errors need coverage of existing behavior. Passing a mocked-provider test does not
+validate live LLM generation.
 
-## Calidad y dependencias
+## Documentation
 
-Las advertencias propias se corrigen, con AXON_WARNINGS_AS_ERRORS=ON.
-HNSWlib/stb se tratan como encabezados externos: no desactives diagnósticos
-globalmente para ocultar advertencias de Axon. Revisa docs/BUILD_WARNINGS.md.
-Las dependencias nuevas necesitan motivo, alcance y licencia. Conserva avisos
-y registra procedencia/modificaciones de código vendorizado.
+The README is an introduction; [LANGUAGE.md](docs/LANGUAGE.md) and [MODULES.md](docs/MODULES.md)
+are the current reference. Keep claims aligned with code and executable evidence. Clearly label
+implemented, experimental, stub and pending behavior. Parser acceptance alone is not implementation.
+Every `axon` fence in these three documents must be a complete program preceded by
+`<!-- axon-check: run -->` or `<!-- axon-check: check -->`. CTest executes the actual Markdown;
+`check` is syntax-only and must state its external requirements. Use assertions for expected results.
 
-No incluyas build-*/, dist/, pesos de modelos, secretos, archivos personales
-ni documentos de terceros usados para pruebas privadas. Usa datos mínimos
-sintéticos y revisa el diff antes del commit.
+## Quality, dependencies and licensing
 
-## Revisión y licencia
+Keep `AXON_WARNINGS_AS_ERRORS=ON`; fix enabled warnings in Axon code. Do not globally suppress
+warnings to hide problems. HNSWlib/stb are external headers; see [BUILD_WARNINGS.md](docs/BUILD_WARNINGS.md).
+Explain new dependencies and preserve their licenses, notices and recorded provenance.
+Do not commit builds, archives, model weights, secrets, personal data or private test documents.
+Use small synthetic fixtures and review the diff.
 
-Un maintainer revisa los PR antes de integrarlos. Pasar CI no garantiza que
-una función esté lista ni que todas las plataformas estén soportadas.
-El código propio conserva MIT; los componentes externos conservan sus
-licencias y avisos. Al contribuir declara cualquier restricción de licencia.
-Consulta CODE_OF_CONDUCT.md y SECURITY.md para convivencia y vulnerabilidades.
+A maintainer reviews contributions before merging. CI success is necessary but does not prove
+all advertised features or platforms. Axon's code is MIT licensed; dependencies retain their own
+terms. Disclose any licensing restrictions in your contribution. Follow [SECURITY.md](SECURITY.md)
+and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

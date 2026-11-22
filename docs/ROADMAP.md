@@ -1,85 +1,93 @@
-# Axon: roadmap operativo de Core y Web
+# Axon Core and Web roadmap
 
-Actualizado el 21 de noviembre de 2026. Consolida lo revisado del ZIP, los parches de validación y las decisiones de esta conversación. Los RFC antiguos y la web todavía requieren reconciliación; su numeración de fases no debe usarse como evidencia de implementación.
+Current development version: **0.4.0-alpha.1**. Reviewed against public-main baseline `7a1537f`
+on 22 November 2026. Implementation, validation and publication are separate states.
+The [capability inventory](../FEATURES.md) records evidence; historical RFC phases do not establish status.
 
-Estados: **implementado** describe código existente; **validado** exige pruebas; **publicado** exige artefactos disponibles. No son sinónimos.
+## 1. Stabilize the execution contract
 
-## 1. Estabilización del contrato de ejecución — base validada
+Implemented with focused regressions: functions/closures, relative imports, CLI diagnostics,
+three agent invocation forms, task input/output references, repeated-invocation isolation,
+basic task graphs and post-delays. Scheduler shutdown and strict-build portability fixes are included.
+Keep these contracts covered as the language evolves. Pending: effective deadlines/cancellation,
+actual language-level parallel execution, complete graph policy semantics and consistent arity/type errors.
 
-- Base: lexer/parser, intérprete, funciones, closures, imports, CLI y ejemplos; 19 casos CTest anteriores confirmados en Windows y Linux.
-- Corrección actual: argumento del agente en `__input__`, referencias explícitas `Task.output`, `Agent.Task` y `Agent.Task.output`, referencias no adyacentes y separación de resultados entre invocaciones.
-- Mantener las tres formas: agente completo, task específica y pipeline.
-- Unificar tareas secuenciales y task_graph bajo el mismo dispatch de input/prompts/resultados.
-- Aplicar delays posteriores de task/agente/flow y comprobar tiempos sin depender de un modelo.
-- Base confirmada en Linux y Windows: 22 CTest, 31 casos runtime y 78 del intérprete; encadenamiento real con Ollama confirmado en Windows. Apagado del scheduler corregido y compilación estricta sin warnings.
-- Timeouts efectivos/cancelación y concurrencia real de `parallel` siguen pendientes. Los delays no implementan timeouts.
+## 2. Publish the first alpha
 
-## 2. Primera alpha distribuible — bloque actual
+Completed baseline: official organization repository and merged import, single VERSION source,
+strict CI jobs for Linux/Windows/experimental macOS/Docker, Windows portable packaging and
+second-machine manual execution. The current documentation change reconciles English reference
+content with code, checks Markdown examples and removes the duplicate root license.
 
-- Resolver cambios sin consolidar y trabajar en la organización oficial `axon-software-…`.
-- Fuente única VERSION `0.4.0-alpha.1`, derivada para CLI/CMake/archivos; parche de empaquetado añade el caso cli.version.
-- Preparación del ZIP portable Windows x64 con runtime MinGW estático, avisos/licencias, hashes y ejecución del archivo extraído. Darío confirmó ejecución correcta en un segundo Windows. Cada nuevo candidato debe volver a probarse; ver RELEASING.md.
-- Tag, changelog, notas, checksums y artefactos vinculados al mismo código.
-- CI y guía para compilar, probar y contribuir; issues/PR, conducta y seguridad preparados en esta entrega. Falta ejecutarlos/configurarlos en el repositorio oficial; ver CI.md y GITHUB_LAUNCH.md.
-- README corregido para reflejar el MIT existente en LICENSE.txt. Avisos de terceros añadidos; revisar procedencia de los archivos vendorizados antes de publicación.
-- Alpha no exige terminar todo este roadmap; exige alcance y limitaciones claros.
+Remaining before release: review this change and rerun CI, verify private reporting/contact channels,
+finish vendored provenance review, choose the tag commit, build/tag-test exact artifacts, repeat clean-machine
+acceptance, publish a GitHub prerelease with correct checksums and link it from the web.
+See [GITHUB_LAUNCH.md](GITHUB_LAUNCH.md). No release/image is considered published just because CI passed.
 
-## 3. Plataformas, estabilidad y beta
+## 3. Platforms, packaging and beta
 
-- Construcción y paquetes Linux/macOS con arquitecturas declaradas y comprobadas. Docker Linux y CI nativa están preparados; falta ejecutarlos en sus entornos antes de afirmar soporte.
-- macOS Intel/Apple Silicon o universal únicamente cuando esté verificado.
-- Beta cuando el alcance comprometido esté completo y las plataformas declaradas funcionen.
-- RC y estable después de resolver bloqueos, con regresiones y compatibilidad documentadas.
+Linux native archives and Docker execution passed configured CI; establish a minimum system-library/ABI
+baseline and distribution/architecture test matrix before promising portability.
+Experimental native macOS CI passed, but the job remains non-blocking and packaging is not implemented.
+Choose and test architectures before claiming Intel/Apple Silicon/universal support.
+Add signing/notarization where applicable and document compatibility. Beta requires the committed scope
+and declared platforms to be complete; RC/stable require resolved blockers and a compatibility policy.
 
-## 4. Comunicaciones e integraciones — HTTP y MCP añadidos explícitamente
+## 4. Communications and integrations
 
-- **HTTP/REST:** módulo público pendiente de implementar; GET/POST/JSON, HTTPS, errores, timeouts y límites, con contrato y pruebas reales. Ver HTTP_STATUS.md.
-- **gRPC, WebSockets y sockets:** distinguir sintaxis/interfaces previstas de transportes funcionales; completar integración y pruebas.
-- **MCP:** módulo pendiente solicitado por Darío. Definir rol, versión, capacidades, transporte, ciclo de conexión, autorización y errores. No es un alias de los otros transportes.
-- No se implementa HTTP ni MCP en el parche de paso de parámetros.
+- HTTP/REST: implement a public module with GET/POST/JSON, HTTPS verification, status/headers/body,
+  errors, deadlines, redirects and limits; add real local-server integration tests. See [HTTP_STATUS.md](HTTP_STATUS.md).
+- gRPC, WebSockets and sockets: reconcile parser/interface plans with working transports and tests.
+- MCP: define client/server role, protocol version, capabilities, transport, authorization,
+  connection lifecycle, cancellation and errors. MCP is not an alias for REST or gRPC.
 
-## 5. Lenguaje y multi-flow
+These are future implementation blocks; the existing specialized Ollama HTTP clients are not a public HTTP module.
 
-- Aridad, retorno, representación de funciones, tipos y diagnósticos coherentes.
-- `*args`, `**kwargs`, argumentos nombrados, desempaquetado, imports selectivos y anotaciones opcionales.
-- Propiedad de agentes por flow, aislamiento de contexto e invocación/encadenamiento explícito de flows.
-- Normalización y casos de error de módulos, colisiones y reglas de exportación.
+## 5. Language and multi-flow
 
-## 6. Providers y multimodalidad
+Specify strict arity, returns, function representation and diagnostics. Design variadics, named arguments,
+unpacking, selective imports and optional annotations before adding syntax.
+Complete agent ownership by flow, context isolation and explicit flow invocation/chaining.
+Clarify module collisions and exports. Migrate remaining legacy examples; verify each against current code
+and declare external prerequisites instead of retaining unsupported snippets as reference.
 
-- Consolidar Ollama con pruebas reales separadas de la suite sin servicios externos.
-- Providers OpenAI, Anthropic y Cohere; Google figura en documentos anteriores y requiere reconciliar alcance.
-- Autenticación, HTTPS, errores, límites, retries, streaming e imágenes como entrada.
+## 6. Providers and multimodality
 
-## 7. Datos, documentos e interoperabilidad
+Expand real Ollama integration tests separately from the service-free suite. Define additional providers
+(OpenAI, Anthropic, Cohere; reconcile Google scope), authentication/TLS, limits, retries, streaming and
+image inputs. Provider names in old examples are not implemented adapters.
 
-- Completar pruebas reales de memoria, persistencia, embeddings/HNSW, PDF, DOCX/XLSX y OCR.
-- Consolidar Python/shell y completar SQL/storage con drivers previstos PostgreSQL/MySQL/MongoDB/DuckDB/Arrow según prioridades.
-- Resolver diferencias documentación/código, incluidos regex y algoritmos de hash todavía no implementados.
-- La documentación menciona MuPDF, pero la revisión encontró un lector PDF propio: decidir/documentar arquitectura real.
+## 7. Data, documents and interoperability
 
-## 8. RAG y aprendizaje
+Expand memory/TTL/persistence, embeddings/HNSW, PDF, DOCX/XLSX, images and OCR integration fixtures.
+Document native PDF architecture rather than claiming MuPDF. Remove fixed OCR temporary-file collisions
+before concurrent use. Consolidate Python/shell behavior and design storage drivers based on priorities
+(PostgreSQL/MySQL/MongoDB/DuckDB/Arrow are proposals, not current drivers).
+Specify remaining regex/error semantics and unsupported hashes without changing existing contracts silently.
 
-- Ingestión, recuperación, construcción de contexto y evaluación de RAG nativo.
-- `finetune {}`, LoRA/backend previsto, datasets, checkpoints y carga/exportación.
-- Cognitive Imprinting y Federated Imprinting necesitan especificación verificable antes de implementación.
+## 8. RAG and learning
 
-## 9. Mesh distribuida
+Design native ingestion, retrieval, context construction and evaluation. Specify `finetune`, datasets,
+LoRA backend, checkpoints and export before implementation. Cognitive/Federated Imprinting need verifiable
+specifications; historical learning declarations do not prove training or automatic RAG.
 
-- Descubrimiento, topología, comunicación entre máquinas, cifrado, gossip y consenso.
-- Transporte ultrasónico como frente de investigación separado.
+## 9. Distributed mesh
 
-## 10. Observabilidad y ecosistema
+Discovery, topology, inter-machine transport, encryption, gossip and consensus remain future work.
+Ultrasonic transport is a separate research track, not an available alpha transport.
 
-- Métricas/trazas consistentes, OpenTelemetry y estimación de costos.
-- Gramática/editor, VS Code, diagnósticos, binding Cython y herramientas de desarrollo.
-- Registry y comandos de paquetes/init/new/publish según diseño posterior.
+## 10. Observability and ecosystem
+
+Consistent metrics/traces, OpenTelemetry and cost estimates; editor grammar/VS Code/diagnostics;
+Cython binding validation; registry and package/init/new/publish design. C++ interfaces alone do not
+establish working tooling or runtime integration.
 
 ## 11. Axon Web
 
-- Versiones y estados coherentes con artefactos reales.
-- Rutas, enlaces, descargas/checksums y comunidad conectada a Issues/Discussions.
-- Documentación con origen autoritativo y derechos/licencias de código/assets claros.
-- Playground pendiente: backend aislado y limitado antes de habilitar ejecución pública.
+Align advertised capabilities and versions with the current reference and actual release assets.
+Connect downloads/checksums, repository and community links. Review source/assets licensing.
+The hosted playground is not operational: isolate execution and add limits before enabling public code.
+Web code requires its own review; this Core change does not update hosting or deploy the website.
 
-Los documentos de nuevas features que Darío enviará después pueden ampliar o precisar estos bloques. No se agregan como implementadas capacidades solo por figurar en el roadmap.
+New feature proposals may refine these blocks. Mentioning a feature does not mark it implemented
+or commit it to the next alpha.

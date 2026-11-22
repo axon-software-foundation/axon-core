@@ -1,54 +1,42 @@
-# CI de Axon Core
+# Axon Core CI
 
-El workflow .github/workflows/ci.yml se activa con push, pull_request o
-ejecución manual. Está preparado para GitHub.com; todavía debe ejecutarse
-en el repositorio oficial para validar herramientas, permisos y runners.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) runs on push, pull request and manual dispatch.
+All six jobs passed on baseline public-main commit `7a1537f`; new changes require a new run.
 
-| Job | Qué exige | Estado de distribución |
+| Job | Checks | Distribution boundary |
 | --- | --- | --- |
-| Linux GCC / Debug y Release | CTest y ejemplos; Release prueba el archivo nativo | Archivo de validación; sin garantía entre distribuciones |
-| Windows UCRT64 / Debug | CTest y ejemplos con GCC | Validación del código |
-| Windows UCRT64 / Release | Paquete estático, imports PE, hashes, ejecución extraída con PATH reducido | Candidato Windows para revisión |
-| macOS Apple Clang / experimental | Build Release, CTest y ejemplos | No bloqueante; sin paquete ni soporte certificado |
-| Linux Docker / candidate | Build multietapa con tests y ejecución de imagen como usuario no root | Imagen local de CI; no se publica |
+| Linux GCC Debug/Release | CTest, suites and examples; Release also checks extracted archive | Native archive only; no distro-wide ABI guarantee |
+| Windows UCRT64 Debug | CTest and examples with GCC | Source validation |
+| Windows UCRT64 Release | Static portable, PE imports, hashes and extracted execution with reduced PATH | Windows candidate for review |
+| macOS Apple Clang experimental | Native Release, CTest and examples | Non-blocking; no package or universal-binary claim |
+| Linux Docker candidate | Multi-stage build/tests, then non-root execution | Local CI image; not published |
 
-Las verificaciones estrictas usan AXON_WARNINGS_AS_ERRORS=ON. Ningún job
-requiere Ollama, modelos, OCR, credenciales de servicios ni secretos del repo.
-Los checks de modelo real son manuales y adicionales.
+All builds use strict warnings. No baseline job requires Ollama, model weights, OCR or service credentials.
+Markdown examples are checked through `docs.examples` in CTest; model-dependent snippets are syntax-only.
+See [VALIDATION.md](VALIDATION.md) for counts and evidence boundaries.
 
-Los jobs Linux/Windows/Docker son bloqueantes. macOS usa continue-on-error
-explícitamente hasta resolver portabilidad: un workflow verde no certifica
-macOS. El runner macos-15 usa la arquitectura que reporte su imagen; no se
-afirma compatibilidad universal, Intel ni Apple Silicon sin pruebas específicas.
+macOS uses `continue-on-error: true`. A green workflow alone can hide a failing experimental job;
+inspect its own conclusion. Do not claim architectures beyond the runner actually used.
 
-## Integridad y permisos
+## Permissions and integrity
 
-- Las Actions están fijadas a commits completos, con versiones comentadas.
-  Dependabot propone actualizaciones; necesitan revisión y ejecución de CI.
-- El token tiene solo contents:read y checkout no conserva credenciales.
-- Los PR de forks se prueban mediante pull_request; no usamos
-  pull_request_target para ejecutar código del contribuidor con privilegios.
-- Se conservan artefactos candidatos 14 días y logs de CTest cuando falla un job.
-- En un tag, check-release.sh exige que su nombre sea v seguido de VERSION
-  y que exista la entrada del changelog.
-- No hay pasos para crear releases, hacer push, firmar o publicar imágenes.
+Actions are pinned to full commits; Dependabot proposes updates that still need review and CI.
+The workflow token has `contents: read` and checkout does not preserve credentials.
+Fork PRs use `pull_request`, not privileged `pull_request_target` execution.
+Candidate artifacts are retained for 14 days; CTest logs are uploaded on failure when available.
+Compiler/configuration logs remain in the job log even when no CTest file was produced.
 
-## Leer un fallo
+On tags, `check-release.sh` requires `v` followed by VERSION and a matching changelog heading.
+The workflow does not create releases, push commits, sign binaries or publish images.
 
-Abre Actions, la ejecución y el primer step fallido. Descarga los logs cuando
-existan. Un BAD_COMMAND de Windows significa que no se inició el proceso;
-revisa el error del sistema/CodeIntegrity antes de atribuirlo a una prueba.
-Un timeout requiere localizar la espera; no se resuelve subiendo límites por
-defecto. Los logs de configure/build permanecen visibles en el job.
+## Diagnose and release
 
-## Antes de usar artefactos para una release
+Open the first failing step and preserve its complete diagnostic. A Windows BAD_COMMAND may mean
+application-control policy prevented process startup; inspect system/CodeIntegrity evidence.
+A timeout needs a located blocking operation, not an arbitrary increase in its limit.
 
-Usa una ejecución confiable del tag en el repo oficial, no un artefacto de PR
-o fork. Verifica commit/tag, estado de todos los checks bloqueantes, ZIP y su
-checksum. El hash mostrado por upload-artifact corresponde al contenedor del
-artefacto de Actions; el .zip.sha256 de Axon corresponde al ZIP portable.
-No son intercambiables. Sigue GITHUB_LAUNCH.md para la revisión y publicación.
-
-Antes de activar protecciones de rama, deja que CI se ejecute y selecciona
-los nombres reales de los checks bloqueantes. No hagas obligatorio el check
-experimental de macOS hasta completar su validación.
+Use artifacts from a trusted tag run in the official repository for releases, not an unreviewed PR/fork.
+The Actions artifact-container digest differs from the portable `.zip.sha256`; do not substitute one
+for the other. Follow [GITHUB_LAUNCH.md](GITHUB_LAUNCH.md) for exact-tag acceptance.
+Configure required checks using actual job names. Keep experimental macOS non-required until its
+support policy is decided; this document does not change branch protection.

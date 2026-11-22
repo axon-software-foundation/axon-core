@@ -35,10 +35,11 @@ set(root "${stage}/${name}")
 file(MAKE_DIRECTORY "${root}/bin" "${root}/docs" "${check}/unrelated working directory")
 file(COPY "${AXON_CLI}" "${AXON_RUNTIME_TEST}" "${AXON_INTERP_TEST}" DESTINATION "${root}/bin")
 get_filename_component(cli_name "${AXON_CLI}" NAME)
-file(COPY "${source}/LICENSE.txt" "${source}/VERSION" "${source}/THIRD_PARTY_NOTICES.md" DESTINATION "${root}")
+file(COPY "${source}/LICENSE" "${source}/VERSION" "${source}/THIRD_PARTY_NOTICES.md" DESTINATION "${root}")
 file(COPY "${source}/licenses" DESTINATION "${root}")
 file(COPY "${source}/docs/PORTABLE.md" "${source}/docs/RELEASE_NOTES.md"
-    "${source}/docs/ROADMAP.md" "${source}/docs/HTTP_STATUS.md" DESTINATION "${root}/docs")
+    "${source}/docs/ROADMAP.md" "${source}/docs/HTTP_STATUS.md"
+    "${source}/docs/LANGUAGE.md" "${source}/docs/MODULES.md" DESTINATION "${root}/docs")
 file(COPY "${source}/examples/validation" DESTINATION "${root}/examples")
 file(COPY "${source}/examples/flows.axon" DESTINATION "${root}/examples")
 

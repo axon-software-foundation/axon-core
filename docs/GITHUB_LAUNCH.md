@@ -1,118 +1,72 @@
-# Publicar la primera alpha y abrir la comunidad
+# Publish the first alpha and open the community
 
-Esta guía prepara la publicación. Los archivos de esta entrega no hacen push,
-crean tags ni publican por su cuenta. El repositorio oficial confirmado es
-https://github.com/axon-software-foundation/axon-core. La importación se
-revisa mediante un PR antes de integrar cambios o publicar una release.
+Official repository: https://github.com/axon-software-foundation/axon-core.
+The initial import is merged. Documentation/license changes must be reviewed in their own PR before tagging.
+This checklist does not itself create a release or change repository settings.
 
-## 1. Consolidar el código
+## 1. Review and merge
 
-La rama local reportada es feature/axon-base. Conserva su historial; no hace
-falta reiniciar el repo. Antes de preparar el commit, revisa desde la raíz:
+From a clean public checkout, create a focused branch from updated main. Review all changes, including
+removed `LICENSE.txt` references, executable documentation examples and packaged notices.
+Run strict validation/package checks; push the branch and open a PR. Merge after review and successful
+required checks. Inspect experimental macOS separately because it remains non-blocking.
+Do not commit builds, model weights, secrets or private fixtures.
 
-```bash
-git status --short
-git remote -v
-git diff --check
-git diff --stat
-```
+## 2. Confirm repository readiness
 
-Comprueba que los parches están aplicados, sin binarios/dist/builds/modelos ni
-secretos. Revisa los cambios antes de añadirlos, usando `git add -p` y
-`git add <rutas revisadas>` para archivos nuevos. No incluyas cambios personales
-sin relación. Revisa `git diff --cached` antes del commit.
+Review visibility/access and actual required check names. Enable and test the private security reporting
+channel and establish moderation contacts. Review third-party provenance and preserve notices.
+Do not claim these settings are enabled merely because policy documents exist.
 
-Cuando el remoto oficial esté confirmado, sube una rama y abre un PR hacia la
-rama predeterminada del repo. El nombre de esa rama se toma del repositorio;
-no suponemos que ya exista main ni que Dev-Mw sea la organización final.
+## 3. Tag the exact reviewed code
 
-## 2. Configurar GitHub
-
-- Habilitar Issues y los workflows de Actions revisados. La CI usa solo lectura
-  y no necesita secretos; para contribuciones de forks, revisar las solicitudes
-  de ejecución según la configuración del repo.
-- Habilitar reportes privados de vulnerabilidades y comprobar que el botón
-  Report a vulnerability aparece en Security. Configurar notificaciones para
-  los responsables. SECURITY.md no activa esa función por sí solo.
-- Establecer responsables y contacto privado de moderación de la comunidad.
-- Ejecutar CI y configurar reglas de la rama con los nombres reales de los
-  checks Linux/Windows/Docker que hayan corrido. macOS es experimental y no
-  debe contarse como soporte validado aunque el workflow global esté verde.
-- Habilitar Discussions si se quiere separar preguntas y propuestas de bugs.
-  Revisar Contributions, Issues y PR desde una cuenta sin permisos especiales.
-
-No se incluyen handles, emails, URLs de organización ni CODEOWNERS inventados.
-
-## 3. Cerrar alcance de la alpha
-
-Windows x64: Darío confirmó build GCC 16.2 sin warnings, 22/22 CTest,
-prueba del portable extraído y ejecución correcta en otro Windows. Este
-resultado corresponde al candidato local anterior a los cambios de CI.
-Si reconstruyes otro binario para publicar, prueba ese nuevo archivo también.
-
-Linux tiene validación nativa en el host de revisión; no se anuncia todavía
-portabilidad entre distribuciones. Docker y macOS requieren sus ejecuciones
-reales en CI. Para el primer lanzamiento, la única descarga portable que se
-propone anunciar es Windows x64.
-
-Revisar procedencia/licencias de los archivos vendorizados y posibles cambios
-locales antes de abrir el repo. No está resuelto solo por añadir textos de
-licencia. Confirma el canal de seguridad antes de publicar.
-
-## 4. Etiquetar el código aprobado
-
-Después de integrar el PR, desde un checkout limpio del commit aprobado:
+From clean updated main:
 
 ```bash
+git switch main
+git pull --ff-only origin main
 bash scripts/check-release.sh
 git status --short
 git log -1 --oneline
 git tag -l v0.4.0-alpha.1
 ```
 
-El estado debe estar limpio y el tag no debe existir. Si existe, no lo muevas:
-avanza VERSION a la siguiente alpha, actualiza su entrada de changelog y repite
-la validación. Cuando el commit y remoto estén verificados:
+Confirm the official origin, clean state, approved commit and absence of this tag. If it already exists,
+do not move it: advance VERSION/changelog to the next alpha and repeat validation.
+Only when those checks are complete:
 
 ```bash
 git tag -a v0.4.0-alpha.1 -m "Axon 0.4.0-alpha.1"
 git push origin v0.4.0-alpha.1
 ```
 
-El push del tag ejecuta CI y exige coincidencia entre tag, VERSION y changelog.
-No crea una release. La URL del origen debe ser la oficial ya revisada.
+The tag triggers CI and version/changelog consistency checks; it does not publish a release.
 
-## 5. Revisar los artefactos exactos del tag
+## 4. Accept the exact tag artifact
 
-En Actions, elige la ejecución del tag oficial y comprueba su commit, los
-checks bloqueantes y el artefacto windows-x64-candidate-<SHA>. Descárgalo y
-extrae el contenedor de Actions. Dentro deben estar el portable y su .sha256.
-
-Desde la carpeta que contiene ambos, con Git Bash:
+Open the trusted tag run in Actions and verify its source commit and all required job results.
+Download `windows-x64-candidate-<SHA>` and extract the Actions artifact container; inside are the
+portable ZIP and its checksum. The container digest is not the portable checksum.
 
 ```bash
 sha256sum -c axon-v0.4.0-alpha.1-windows-x64.zip.sha256
 ```
 
-Prueba ese ZIP exacto siguiendo PORTABLE.md y revisa BUILD_INFO.txt:
-Source commit debe coincidir con el tag y Source state debe ser clean.
-Una reconstrucción cambia el checksum: usa siempre el .sha256 de ese archivo,
-no el de otro candidato previo. Registra los resultados de aceptación y las
-versiones de Windows probadas. La firma de código sigue pendiente; conserva
-la incidencia observada de Smart App Control en las notas.
+Follow [PORTABLE.md](PORTABLE.md) with that exact ZIP, preferably on a second Windows x64 machine
+without a development toolchain. `BUILD_INFO.txt` must identify the tag commit and clean source state.
+Record OS/architecture/results and optional live-model results. Linux artifacts remain native validation
+archives; no macOS package or registry image should be advertised unless separately built and accepted.
 
-## 6. Crear una prerelease en borrador
+## 5. Prepare and publish a prerelease
 
-Desde la interfaz GitHub, crea una release para el tag existente, marca
-prerelease y guarda primero un borrador. Adjunta el ZIP portable y su .sha256,
-usa docs/RELEASE_NOTES.md y comprueba que no diga estar publicado antes de
-terminar la revisión. No marques esta alpha como Latest estable.
-
-Si usas GitHub CLI, con el repo oficial ya seleccionado y los archivos
-descargados en dist/ del checkout revisado:
+Create a GitHub release for the existing tag, mark it as a prerelease and save a draft first.
+Attach the accepted ZIP and `.sha256`, adapting [RELEASE_NOTES.md](RELEASE_NOTES.md) to the actual assets.
+Do not describe an alpha as a stable Latest release.
+Optional GitHub CLI commands (requires an authenticated CLI and downloaded assets in dist):
 
 ```bash
 gh release create v0.4.0-alpha.1 \
+  --repo axon-software-foundation/axon-core \
   --verify-tag --draft --prerelease \
   --title "Axon 0.4.0-alpha.1" \
   --notes-file docs/RELEASE_NOTES.md \
@@ -120,34 +74,16 @@ gh release create v0.4.0-alpha.1 \
   dist/axon-v0.4.0-alpha.1-windows-x64.zip.sha256
 ```
 
-Antes de publicar, revisar tag/commit, adjuntos, notas, licencia/procedencia,
-canal privado de seguridad, resultados de CI y prueba del ZIP descargado.
-La publicación final se realiza tras esa revisión explícita.
+Review tag/commit, assets, notices, checksums, clean-machine results, limitations and private contacts,
+then publish the reviewed draft. Signing and reproducibility remain separate roadmap work.
 
-## 7. Abrir la comunidad y actualizar Axon Web
+## 6. Community and web
 
-Crear issues enfocados, sin marcarlos hechos solo por existir:
+Open focused issues with acceptance criteria: Linux ABI/platform matrix, macOS packaging, third-party
+provenance, Windows signing, HTTP contract, MCP design, deadlines/cancellation and actual concurrency.
+Only label small, well-specified tasks as good first issues; security/transports/concurrency are not
+automatically beginner work. Use issues for proposals rather than presenting roadmap items as delivered.
 
-- Resultados y compatibilidad Linux por distribución/arquitectura.
-- Resolver y validar macOS; definir Intel/Apple Silicon y empaquetado.
-- Completar metadatos de procedencia y revisión de terceros.
-- Firma de código Windows y documentación de bloqueos del sistema.
-- Contrato/pruebas del módulo HTTP/REST pendiente.
-- Diseño del módulo MCP junto al bloque de comunicaciones.
-- Timeouts/cancelación y concurrencia real, como problemas separados.
-
-No se asigna good first issue automáticamente a seguridad, transportes o
-concurrencia. Elegir primeras tareas pequeñas con criterios de aceptación.
-
-En axon-pl.org, enlazar la release real y su código, mostrar 0.4.0-alpha.1
-como alpha y anunciar solo el Windows publicado. Reemplazar URLs, versiones y
-hashes de ejemplo por los del artefacto real. Mantener Linux/macOS como
-pendientes y el playground como no disponible. No hay cambios de hosting en
-esta entrega; falta confirmar repositorio y revisar el código de Axon Web.
-
-## Referencias de configuración
-
-- GitHub Actions: https://docs.github.com/en/actions
-- Reportes privados: https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository
-- GitHub CLI: https://cli.github.com/manual/gh_release_create
-- Setup MSYS2: https://github.com/msys2/setup-msys2
+Update axon-pl.org to link the real prerelease/source, version and checksums. Advertise only available
+platform assets and keep the playground unavailable until its isolated backend is ready.
+Web code/hosting is a separate project and is not deployed by this Core change.

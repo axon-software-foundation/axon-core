@@ -1,36 +1,31 @@
-# Seguridad
+# Security policy
 
-Axon está en desarrollo alpha. Solo la revisión de desarrollo más reciente se
-mantiene activamente; no existe todavía una línea estable con parches de
-seguridad garantizados ni un compromiso de tiempos de respuesta.
+Axon is alpha software. Only the latest development revision is actively maintained; there is
+no stable security-support line or guaranteed response time yet.
 
-## Reportar una vulnerabilidad
+## Reporting vulnerabilities
 
-Usa la pestaña **Security → Advisories → Report a vulnerability** del repo
-oficial cuando los maintainers hayan habilitado los reportes privados de GitHub.
-No incluyas exploits, credenciales o datos sensibles en issues/PR públicos.
+Use **Security → Advisories → Report a vulnerability** on the official repository when private
+vulnerability reporting is enabled. Do not include exploits, credentials or sensitive data in
+public issues or pull requests.
 
-Si el botón no está disponible, solicita públicamente solo un canal privado
-de seguridad, sin detalles técnicos sensibles. Espera a que los responsables
-lo establezcan antes de compartir el reporte. Activar y probar ese canal es
-un requisito pendiente de configuración del repositorio antes del lanzamiento.
+If no private reporting button/contact is available, publicly request only a private security
+contact without technical details. Wait for maintainers to establish the channel before sending
+the report. Maintainers must verify that channel before launching the release; its availability
+is not established by this document.
 
-Incluye versión/commit, OS y arquitectura, un ejemplo mínimo con datos
-sintéticos, impacto observado y pasos de reproducción. Los responsables
-revisarán alcance, mitigación y divulgación coordinada con quien reporta.
+Include version/commit, OS, architecture, impact, reproduction steps and a minimal synthetic example.
+Maintainers will coordinate assessment, mitigation and disclosure with the reporter.
 
-## Límites de ejecución
+## Execution boundary
 
-Los scripts .axon deben tratarse como código con los permisos del usuario:
-Core incluye operaciones sobre archivos, shell y servicios locales. No hay
-una sandbox para ejecutar código ajeno de forma segura. No ejecutes ejemplos
-no confiables ni montes datos sensibles en contenedores de pruebas.
+Treat `.axon` programs as code running with the user's permissions. Core can access files,
+execute shell commands and contact local services. There is no sandbox for safely running
+untrusted programs. Do not mount credentials or sensitive files into test containers.
+The public playground is pending and needs isolation and resource limits before accepting code.
+Docker deployment alone is not a guarantee of isolation against hostile scripts.
 
-El playground público sigue pendiente; requiere aislamiento y límites antes
-de habilitar ejecución de terceros. Docker es una herramienta de despliegue,
-no una garantía de aislamiento frente a código hostil.
-
-Las descargas alpha aún no tienen firma de código. SHA256 comprueba igualdad
-de bytes, no identidad del publicador. Smart App Control bloqueó un ejecutable
-local durante las pruebas Windows; reconstruir no constituye una solución
-garantizada ni una política de distribución. La firma sigue pendiente.
+Alpha packages are not code-signed. SHA256 checks byte integrity, not publisher identity.
+Windows application-control policy blocked a locally built executable during earlier testing;
+rebuilding is not a guaranteed remedy. Do not disable organizational security policy to run Axon.
+Signing and the distribution policy remain release work.
