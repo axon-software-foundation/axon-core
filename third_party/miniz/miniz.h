@@ -1,6 +1,12 @@
 /**
- * miniz.h — Minimal ZIP reader using zlib
- * Implements only what office_reader.cpp needs.
+ * Axon-maintained minimal ZIP reader using zlib.
+ * Implements only the mz_zip_* API subset needed by office_reader.cpp.
+ * A maintainer-supplied development record documents creation with Claude
+ * assistance after unsuccessful attempts to integrate upstream Miniz.
+ * This file is not an unmodified upstream Miniz distribution; its legacy
+ * path and API names do not identify an upstream release.
+ * See THIRD_PARTY_NOTICES.md in the source repository for evidence and limits.
+ * The vendored zlib code retains its own license and notices.
  */
 #pragma once
 #ifdef __cplusplus
