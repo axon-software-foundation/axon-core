@@ -1,0 +1,267 @@
+# axon_complete.axon - Validacion completa Phase 1 -> Phase 3A
+# Incluye: aritmetica, strings, listas, control flow, archivos,
+# memoria, shell, agentes, pipelines, f-strings, operadores nuevos
+
+import session
+import memory
+
+/* -- Flow -------------------------------------------------------- */
+flow Validation {
+    version   = "complete-3a-v2"
+    telemetry = true
+    input     = "Axon validation run v2"
+
+    output {
+        format  = structured
+        level   = info
+        target  = stdout
+        metrics = true
+    }
+}
+
+/* -- Storage nombrado -------------------------------------------- */
+storage LocalDB { type = "sqlite"  path = "./data/validation.db" }
+
+/* -- Agentes: definiciones puras ---------------------------------- */
+agent Processor {
+    provider    ollama
+    model       llama3.2
+    transport   rest
+    endpoint    "localhost:11434"
+    temperature = 0.7
+
+    memory { runtime = enabled  session = enabled }
+
+    validation {
+        confidence  > 0.0
+        max_retries = 1
+        on_fail     = skip
+    }
+
+    task Analyze {
+        input   = __input__
+        output  = text
+        prompts = ["Analyze this input and respond with one sentence."]
+    }
+
+    task Summarize {
+        input   = Processor->Analyze
+        output  = text
+        prompts = ["Summarize in 10 words or less."]
+    }
+}
+
+agent Reviewer {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.3
+
+    task Review {
+        input   = __input__
+        output  = text
+        prompts = ["Review and approve or reject this content."]
+    }
+}
+
+main {
+
+    /* -- 1. Aritmetica: basica + mod + potencia ------------------- */
+    x    = 10
+    y    = 3
+    sum  = x + y
+    sub  = x - y
+    mul  = x * y
+    div  = x / 4
+    mod  = x % y
+    pow  = 2 ** 8
+    pow2 = x ** 2
+    print("[1] sum:", sum, "sub:", sub, "mul:", mul)
+    print("[1] div:", div, "mod:", mod, "2**8:", pow, "10**2:", pow2)
+
+    /* -- 2. Strings: metodos basicos ------------------------------ */
+    text  = "  Hello Axon World  "
+    clean = text.strip()
+    lower = clean.lower()
+    upper = clean.upper()
+    rep   = clean.replace("Axon", "Language")
+    parts = clean.split(" ")
+    pos   = clean.find("Axon")
+    has   = clean.contains("World")
+    sw    = clean.startswith("Hello")
+    ew    = clean.endswith("World")
+    rpt   = "ab".repeat(3)
+    print("[2] strip:", clean)
+    print("[2] lower:", lower)
+    print("[2] replace:", rep)
+    print("[2] split parts:", parts.size())
+    print("[2] find 'Axon':", pos)
+    print("[2] contains:", has, "startswith:", sw, "endswith:", ew)
+    print("[2] repeat:", rpt)
+
+    /* -- 3. Listas: append, pop, join, metodos -------------------- */
+    numbers = [1, 2, 3, 4, 5]
+    numbers.append(6)
+    numbers.append(7)
+    last   = numbers.last()
+    first  = numbers.first()
+    sz     = numbers.size()
+    joined = numbers.join(", ")
+    popped = numbers.pop()
+    print("[3] size after append+pop:", numbers.size())
+    print("[3] first:", first, "last before pop:", last, "popped:", popped)
+    print("[3] joined:", joined)
+
+    output = []
+    i = 1
+    for n in [1, 2, 3, 4, 5] {
+        result = f"5 x {n} = {5*n}"
+        output.append(result)
+        i = i + 1
+    }
+    print("[3] output list:", output.size(), "items, last:", output.last())
+
+    /* -- 4. f-strings --------------------------------------------- */
+    name  = "Axon"
+    ver   = 3
+    score = 0.92
+    msg1  = f"Language: {name} v{ver}"
+    msg2  = f"Score: {score * 100}%"
+    msg3  = f"2^10 = {2 ** 10}"
+    msg4  = f"Items: {output.size()} collected"
+    print("[4]", msg1)
+    print("[4]", msg2)
+    print("[4]", msg3)
+    print("[4]", msg4)
+
+    /* -- 5. Operadores: &&, ||, else if --------------------------- */
+    a = true
+    b = false
+    print("[5] && :", a && b)
+    print("[5] || :", a || b)
+    print("[5] != :", 5 != 3, 5 != 5)
+
+    val = 75
+    if val >= 90 {
+        grade = "A"
+    } else if val >= 80 {
+        grade = "B"
+    } else if val >= 70 {
+        grade = "C"
+    } else {
+        grade = "F"
+    }
+    print("[5] else if grade:", grade)
+
+    user_ok  = true
+    score_ok = score > 0.8
+    if user_ok && score_ok {
+        access = "granted"
+    } else {
+        access = "denied"
+    }
+    print("[5] compound &&:", access)
+
+    /* -- 6. while con append -------------------------------------- */
+    acc = []
+    idx = 0
+    while idx < 5 {
+        acc.append(f"item_{idx}")
+        idx = idx + 1
+    }
+    print("[6] while+append:", acc.size(), "items, last:", acc.last())
+
+    /* -- 7. typeof() ---------------------------------------------- */
+    print("[7] typeof string:", typeof("hello"))
+    print("[7] typeof number:", typeof(42))
+    print("[7] typeof bool:  ", typeof(true))
+    print("[7] typeof list:  ", typeof([1,2,3]))
+    print("[7] typeof null:  ", typeof(null))
+
+    /* -- 8. match ------------------------------------------------- */
+    status = "approved"
+    match status {
+        "approved" -> { verdict = f"OK: {status}" }
+        "rejected" -> { verdict = f"FAIL: {status}" }
+        _          -> { verdict = "unknown" }
+    }
+    print("[8] match:", verdict)
+
+    /* -- 9. try / catch ------------------------------------------- */
+    try {
+        raise "TestError: deliberate"
+    } catch err {
+        print("[9] caught:", err)
+    }
+
+    /* -- 10. file: read/write/append/delete/mkdir/rmdir/ls -------- */
+    file->mkdir("/tmp/axon_test_dir")
+    file->write("/tmp/axon_test_dir/data.txt", "line1\nline2\nline3\n")
+    file->append("/tmp/axon_test_dir/data.txt", "line4\n")
+    fcontent = file->read("/tmp/axon_test_dir/data.txt")
+    exists   = file->exists("/tmp/axon_test_dir/data.txt")
+    entries  = file->ls("/tmp/axon_test_dir")
+    print("[10] read:", fcontent.length(), "bytes, exists:", exists)
+    print("[10] ls:", entries.size(), "entries")
+    file->delete("/tmp/axon_test_dir/data.txt")
+    file->rmdir("/tmp/axon_test_dir")
+    print("[10] after cleanup:", file->exists("/tmp/axon_test_dir"))
+
+    /* -- 11. shell interop ---------------------------------------- */
+    shell { echo "SHELL_OK" }
+    print("[11] shell:", shell.stdout)
+
+    /* -- 12. memory: volatile ------------------------------------- */
+    memory->store("user",    "dario")
+    memory->store("version", "3a")
+    memory->store("score",   "0.92")
+    print("[12] get:", memory->get("user"), memory->get("version"))
+    print("[12] has:", memory->has("user"), "miss:", memory->has("ghost"))
+    print("[12] size:", memory->size())
+    memory->store("sess", "turn1", "session")
+    memory->store("flag", "ready", "shared")
+    print("[12] session:", memory->get("sess", "session"))
+    print("[12] shared:", memory->get("flag", "shared"))
+    memory->remove("score")
+    print("[12] after remove:", memory->size())
+
+    /* -- 13. memory: persistent (disco) --------------------------- */
+    memory->store("model",  "llama3",  "persistent")
+    memory->store("tokens", "12345",   "persistent")
+    ok = memory->persist("/tmp/axon_phase3a.bin")
+    print("[13] persist:", ok, "size:", memory->size("persistent"))
+    memory->clear("persistent")
+    loaded = memory->load("/tmp/axon_phase3a.bin")
+    print("[13] load:", loaded, "recovered:", memory->size("persistent"))
+    print("[13] model:", memory->get("model", "persistent"))
+    memory->clear("persistent")
+
+    /* -- 14. Agent->Task(input) + .output ------------------------- */
+    ana = Processor->Analyze(flow.input)
+    print("[14] Processor->Analyze:", ana)
+    print("[14] via .output:", Processor.Analyze)
+
+    /* -- 15. >> pipeline ------------------------------------------ */
+    piped = flow.input >> Processor >> Reviewer
+    print("[15] pipeline >>:", piped)
+
+    /* -- 16. parallel {} ------------------------------------------ */
+    parallel {
+        pa = Processor->Analyze(flow.input)
+        pb = Reviewer->Review(flow.input)
+    }
+    print("[16] parallel a:", pa)
+    print("[16] parallel b:", pb)
+
+    /* -- 17. Reporte final ---------------------------------------- */
+    report = f"=== AXON {name} v{ver} REPORT ===\n"
+    report = report + f"input: {flow.input}\n"
+    report = report + f"grade: {grade}, verdict: {verdict}\n"
+    report = report + f"pow: {pow}, mod: {mod}\n"
+    report = report + f"output_items: {output.size()}\n"
+    report = report + "=== END ===\n"
+    file->write("/tmp/axon_validation_report.txt", report)
+    print("[17] report:", report.length(), "chars")
+
+    print("")
+    print("OK ALL FEATURES VALIDATED -- Phase 1 through Phase 3A v2")
+}

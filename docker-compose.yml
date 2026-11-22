@@ -1,0 +1,52 @@
+services:
+  build:
+    build:
+      context: .
+      target: build-env
+    image: axon-build-env:dev
+    working_dir: /src
+    volumes:
+      - .:/src
+      - axon-linux-build:/tmp/axon-build
+    command:
+      - bash
+      - -euc
+      - |
+        cmake -S /src -B /tmp/axon-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DAXON_WARNINGS_AS_ERRORS=ON
+        cmake --build /tmp/axon-build --parallel 2
+
+  test:
+    build:
+      context: .
+      target: build-env
+    image: axon-build-env:dev
+    working_dir: /src
+    environment:
+      AXON_BUILD_DIR: /tmp/axon-build
+    volumes:
+      - .:/src
+      - axon-linux-build:/tmp/axon-build
+    command: ["bash", "scripts/validate.sh", "Release", "-G", "Ninja", "-DAXON_WARNINGS_AS_ERRORS=ON"]
+
+  shell:
+    build:
+      context: .
+      target: build-env
+    image: axon-build-env:dev
+    working_dir: /src
+    volumes:
+      - .:/src
+      - axon-linux-build:/tmp/axon-build
+    stdin_open: true
+    tty: true
+    command: bash
+
+  axon:
+    build:
+      context: .
+      target: runtime
+    image: axon:dev
+    command: ["version"]
+
+volumes:
+  axon-linux-build:

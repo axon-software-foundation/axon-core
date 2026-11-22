@@ -1,0 +1,33 @@
+# Optional integration example: requires a running Ollama and llama3.2.
+# This is not part of the offline automated suite.
+flow FruitDemo {
+    input = "Responde cada tarea respetando la fruta del texto recibido"
+    delay = 0.05
+    debug = true
+}
+agent Processor {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.1
+    num_ctx     = 4096
+    num_batch   = 256
+    delay       = 0.05
+
+    task Analyze {
+        input = __input__
+        delay = 0.1
+        prompt = ["Escoge una fruta entre banano, manzana y mandarina. Escribe su nombre y una caracteristica."]
+    }
+
+    task Summarize {
+        input = Analyze.output
+        delay = 0.1
+        prompt = ["El mensaje recibido es el resultado de la tarea anterior. Da tres caracteristicas de esa misma fruta. No elijas otra."]
+    }
+}
+main {
+    result = Processor("Escoge una sola fruta y mantenla durante las dos tareas")
+    print("Analyze: ", Processor.Analyze)
+    print("Summarize: ", Processor.Summarize)
+    print("Resultado final: ", result)
+}

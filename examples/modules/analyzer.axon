@@ -1,0 +1,17 @@
+# ── analyzer.axon ────────────────────────────────────────────
+flow Analyzer {
+    version = "1.0"
+    input   = "texto procesado"
+    debug   = true
+}
+
+agent Scorer {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.2
+
+    task Score {
+        input  = __input__
+        prompt = ["Analiza el sentimiento de este texto. Responde solo: positivo, negativo o neutral"]
+    }
+}

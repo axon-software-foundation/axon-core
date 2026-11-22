@@ -1,0 +1,13 @@
+# Configured post-delays: 2*0.02s tasks + 0.03s agent + 0.04s flow = 0.11s.
+# CLI startup/Ollama detection adds overhead; internal tests measure each scope.
+flow Demo { input = "delay test" delay = 0.04 debug = false }
+agent Processor {
+    delay = 0.03
+    task First { input = __input__ delay = 0.02 }
+    task Second { input = First.output delay = 0.02 }
+}
+main {
+    result = Processor("delay test")
+    if result != "delay test" { raise "delay example changed the input" }
+    print("PASS delays; the flow post-delay runs after main completes")
+}

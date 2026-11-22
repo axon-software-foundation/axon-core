@@ -1,0 +1,15 @@
+.git
+../.github
+build
+build-*
+**/CMakeFiles
+**/CMakeCache.txt
+dist
+dist-*
+.env
+.env.*
+.venv
+venv
+**/__pycache__
+*.log
+*.zip

@@ -1,0 +1,47 @@
+flow Master {}
+
+agent Yolo { task Tarea_1 {} task Tarea_2 {} }
+
+main {
+
+    # Auto-detect por extensión — lo más simple
+    rows = file->read("tmp/data/test_io.csv")          # List de Dicts
+    cfg  = file->read("tmp/data/test_io.json")       # Dict o List
+    raw  = file->read("tmp/data/test_io.csv", true)    # forzar texto plano
+
+    for _x in rows {
+        print(_x["age"] * 2)
+    }
+    # Módulos explícitos
+    rows = csv->parse(raw)              # con texto ya leído
+    rows = csv->parse(raw, ",")         # delimitador personalizado
+    csv->write("./out.csv", rows)            # escribe List de Dicts
+
+
+    obj = json->parse(cfg)
+
+    result = []
+    last = 'lastname'
+    for r in obj {
+        res = {}
+        res['new_age'] = r['age'] * 2
+        lastname  = f'lastname'
+        r['user']['name'] = r['name'] + " " + r['lastname']
+        r['user']['age'] = res['new_age']
+        result.append(r)
+    }
+    json->write("./out.json", result, 4)
+
+    print("result: ", result)
+
+    # print(unexisting_var)
+
+
+    txt = json->stringify(obj)               # compacto
+    txt = json->stringify(cfg, 4)            # pretty-print indentado
+    print(txt)
+    json->write("./out.json", result, 4)
+
+    # Tipos auto-detectados en CSV
+    # números → Number, "true"/"false" → Bool, resto → String
+}

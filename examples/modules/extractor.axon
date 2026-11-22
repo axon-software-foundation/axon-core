@@ -1,0 +1,26 @@
+# ── extractor.axon ───────────────────────────────────────────
+flow Extractor {
+    version = "1.0"
+    input   = "texto sin procesar"
+    debug   = true
+}
+
+agent Cleaner {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.1
+    transport   rest
+    endpoint    "localhost:11434"
+
+    task Clean {
+        input  = __input__
+        prompts = ["Limpia y normaliza este texto, devuelve solo el texto limpio sin comentarios"]
+    }
+}
+
+func saludar(name) {
+    print(f'Hello {name}')
+
+    res = Cleaner->Clean("saludame soy dario")
+    print(res)
+}

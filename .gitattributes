@@ -1,0 +1,11 @@
+# Normalize first-party text in Git; keep shell/CI files usable on Unix.
+* text=auto
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.cmake text eol=lf
+*.in text eol=lf
+CMakeLists.txt text eol=lf
+# Preserve the bytes of vendored upstream files.
+third_party/** -text

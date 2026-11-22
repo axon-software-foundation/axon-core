@@ -1,0 +1,67 @@
+/*
+flow F {
+    version = "1.0"
+    input   = "Di hola en 5 idiomas diferentes, solo los saludos, sin explicación"
+}
+
+agent HelloAgent {
+    provider ollama
+    model    llama3
+
+    main {
+        if __input__.isempty() {
+            raise "no input"
+        }
+        return __input__
+    }
+}
+
+graph {
+    HelloAgent -> done [on_success]
+}
+*/
+
+
+
+
+flow F {
+    version = "1.0"
+    input   = "Di hola en 5 idiomas diferentes, solo los saludos"
+}
+
+agent HelloAgent {
+    provider ollama
+    model    llama3.2
+
+    task Greet {
+        input   = flow.input
+        output  = text
+        prompts = [
+            "You are a helpful assistant. Answer with 3 recommended languages.",
+            flow.input,
+            "Also, give me 3 countries of Europe"
+        ]
+    }
+
+    task Composer {
+        # input   = flow.input
+        output  = text
+        prompts = [
+            Great.output,
+            "Depend of the previous answer I would like to have three animals of each country (only third one countries)"
+        ]
+    }
+
+    task_graph {
+        Greet -> Composer [on_failed]
+        Composer -> done [on_success]
+    }
+
+    main {
+        run task_graph
+    }
+}
+
+graph {
+    HelloAgent -> done [on_success]
+}

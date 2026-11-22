@@ -1,0 +1,160 @@
+/* ════════════════════════════════════════════════════════════
+   showcase.axon
+   Demuestra TODAS las features de Axon hasta Phase 2C:
+     - flow + output config
+     - storage nombrado
+     - agentes con memory/validation/transport
+     - tasks + task_graph + io channels
+     - main {} global como entry point
+     - Agent.run() encadenado
+     - parallel {}
+     - control flow: if/else, for, while, match, try/catch
+     - operadores, listas, dicts
+     - comentarios de línea y bloque
+   ════════════════════════════════════════════════════════════ */
+
+import session
+import memory
+
+/* ── Flow: configuración global y logging ──────────────────── */
+flow Showcase {
+    version   = "1.0"
+    telemetry = true
+    input     = "Axon language showcase"
+
+    output {
+        format  = structured   # minimal | structured | json | silent
+        level   = info          # debug | info | warn | error
+        target  = stdout
+        metrics = true
+    }
+}
+
+/* ── Storage nombrado ────────────────────────────────────────── */
+storage LocalDB {
+    type = "sqlite"
+    path = "./data/showcase.db"
+}
+
+/* ── Agente 1: definición pura con memory + validation ─────────── */
+agent Analyzer {
+    provider    ollama
+    model       llama3.2
+    transport   rest
+    endpoint    "localhost:11434"
+    temperature = 0.7
+
+    memory {
+        runtime  = enabled
+        session  = enabled
+        semantic = disabled
+    }
+
+    validation {
+        confidence  > 0.0
+        format      = text
+        max_retries = 1
+        on_fail     = skip
+    }
+
+    task Summarize {
+        input   = flow.input
+        output  = text
+        prompts = ["Summarize this in one short sentence."]
+
+        io {
+            receive = next_task
+            emit    = next_task
+        }
+    }
+
+    task_graph {
+        Summarize -> done [on_success]
+    }
+}
+
+/* ── Agente 2: segunda etapa del pipeline ──────────────────────── */
+agent Reviewer {
+    provider    ollama
+    model       llama3.2
+    temperature = 0.3
+
+    memory {
+        runtime = enabled
+        session = enabled
+    }
+
+    validation {
+        confidence  > 0.0
+        max_retries = 1
+        on_fail     = skip
+    }
+}
+
+/* ── Agentes auxiliares para el bloque parallel ────────────────── */
+agent TagExtractor  { provider ollama  model llama3 }
+agent SentimentTool { provider ollama  model llama3 }
+
+/* ── main {} — único punto de entrada (Go-style) ────────────────── */
+main {
+    /* 1. Validación de entrada */
+    if flow.input.isempty() {
+        raise "InputError: flow.input vacío"
+    }
+
+    /* 2. Variables, aritmética, strings */
+    base_score = 0.5
+    bonus      = 0.35
+    total      = base_score + bonus
+    label      = "score=" + total
+
+    /* 3. Listas y for */
+    steps = ["ingest", "analyze", "review"]
+    trace = ""
+    for s in steps {
+        trace = trace + s + " "
+    }
+
+    /* 4. while */
+    counter = 0
+    while counter < 3 {
+        counter = counter + 1
+    }
+
+    /* 5. Ejecutar agentes encadenados */
+    summary  = Analyzer.run(flow.input)
+    reviewed = Reviewer.run(summary)
+
+    /* 6. parallel {} — tareas auxiliares */
+    parallel {
+        tags      = TagExtractor.run(flow.input)
+        sentiment = SentimentTool.run(flow.input)
+    }
+
+    /* 7. try/catch */
+    try {
+        if total < 0 {
+            raise "ScoreError: negativo"
+        }
+    } catch err {
+        return "error: " + err
+    }
+
+    /* 8. match */
+    match total {
+        0.85 -> return "exact match"
+        _    -> { result = "no exact match" }
+    }
+
+    /* 9. dict + acceso */
+    report = {"label": label, "trace": trace, "steps": counter}
+
+    /* 10. Resultado final */
+    if reviewed.isempty() {
+        return "Showcase done | " + label
+              + " | trace=" + trace
+              + " | loops=" + counter
+    }
+
+    return reviewed
+}

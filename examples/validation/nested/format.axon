@@ -1,0 +1,5 @@
+# Nested imports resolve from this file, not from the terminal's cwd.
+import "../math.axon"
+func format_result(n) {
+    return "result=" + adjusted(n).tostr()
+}

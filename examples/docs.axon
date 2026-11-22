@@ -1,0 +1,80 @@
+flow Validation {
+    version   = "complete-3a-v2"
+    telemetry = true
+    input     = "revision de documentos DOCx"
+
+    output {
+        level   = info
+        target  = stdout
+        metrics = true
+    }
+}
+
+agent Processor {
+    provider    ollama
+    model       llama3.2
+    transport   rest
+    endpoint    "localhost:11434"
+    temperature = 0.2
+    max_tokens  = 2048
+    num_ctx     = 65536
+
+    memory { runtime = enabled  session = enabled }
+
+    validation {
+        confidence  > 0.9
+        max_retries = 1
+        on_fail     = skip
+    }
+
+    task Analyze {
+        input   = __input__
+        # output  = text
+        prompts = ["Analize the complete summary or cv given by the prompt."]
+    }
+
+    task Summarize {
+        input   = Processor->Analyze
+        # output  = text
+        prompts = ["Summarize in 3 paragraphs about the summary, in spanish language"]
+    }
+
+    /*
+    task_graph { # esta funcionalidad unicamente cuando yo corro Pipeline()
+        Analize -> Summarize [on_failed]
+        Summarize -> done [on_success]
+    }
+    */
+}
+
+main {
+    r = null
+    # DOCX → string de texto plano
+    doc = file->read("tmp/data/CV_Dario_Sotelo_E.docx")
+    filtered = doc.replace("<!--[\\s\\S]*?-->|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>|<[^>]+>", "")
+    print(filtered)
+
+    # Forma 1 (orquestacion de N tareas de 1 solo agente)
+    # result = Processor(flow.input)
+
+    # Forma 2 (orquestacion de agentes completos con sus task definidas)
+    # result = flow.input >> Processor(doc)
+    # print("forma2: ", result)
+
+    # Forma 3 (orquestacion a nivel grafo, agente->tarea, agente->tarea)
+
+    doc_analizado = Processor->Analyze(doc)
+    print("Doc analizado: ", doc_analizado)
+    result = Processor->Summarize(doc_analizado)
+    print("resultado: ", result)
+
+
+    # XLSX → List de Dicts (igual que CSV)
+    /*  # TODO: toca probarlo
+    rows = file->read("./data/ventas.xlsx")
+    for r in rows {
+        print(r["producto"], r["cantidad"] * r["precio"])
+    }
+    */
+
+}

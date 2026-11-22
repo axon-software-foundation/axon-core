@@ -1,0 +1,28 @@
+# Agente pertenece a un flujo específico
+agent Fetcher {
+    flow     = Research    # <- declaración de pertenencia
+    provider = ollama
+    model    = llama3.2
+    task Fetch { ... }
+}
+
+agent Validator {
+    flow     = Validation
+    provider = ollama
+    model    = llama3.2
+    task Check { ... }
+}
+
+main {
+    # Correr un flujo completo (ejecuta sus agentes en orden)
+    r1 = Research->run(flow.input)
+
+    # Pasar output de un flujo a otro
+    r2 = Validation->run(r1)
+
+    # O más específico: pasar output de task concreta
+    r2 = Validation->run(Research.Fetcher.Fetch)
+
+    # Encadenar flujos
+    r1 >> Validation
+}

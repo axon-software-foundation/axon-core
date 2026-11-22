@@ -1,0 +1,32 @@
+flow PDFTest {
+    version = "1.0"
+    input   = "test pdf features"
+    debug   = false
+}
+
+main {
+
+    pdf_path = "tmp/data/lago1200x630.pdf" # lago1200x630 face-logo.pdf"
+
+    print("=== 1. PARSE COMPLETO ===")
+    pdf = pdf->parse(pdf_path, "i")
+    print("paginas: ", pdf["pages"])
+    print("imagenes encontradas: ", pdf["images"].size())
+
+    print("=== 2. IMAGENES ===")
+    for img in pdf["images"] {
+        print("imagen ", img["index"],
+              " | formato: ", img["format"],
+              " | pagina: ", img["page"],
+              " | size: ", img["width"], " x ", img["height"])
+
+        path = f'tmp/img_{img["index"]}.{img["format"]}'
+        ok   = image->save(path, img["data"])
+        print("  guardada: ", path, "->", ok)
+
+        small   = image->resize(img["data"], 24, 24)
+        path_sm = f'tmp/img_{img["index"]}_small.jpg'
+        image->save(path_sm, small)
+        print("  resized: ", path_sm)
+    }
+}

@@ -1,0 +1,45 @@
+main {
+
+    /* RUNTIME — más rápido, muere con el proceso */
+    memory->store("temp_score", "0.94")
+    score = memory->get("temp_score")
+    print("runtime:", score)   # 0.94
+
+
+    /* SESSION — vive durante todo el flow */
+    memory->store("user_question", "¿qué es Axon?", "session")
+    memory->store("turn", "1", "session")
+    q = memory->get("user_question", "session")
+    print("session:", q)   # ¿qué es Axon?
+
+
+    /* SHARED — visible para todos los agentes */
+    memory->store("pipeline_status", "running", "shared")
+    memory->store("token_count",     "1240",    "shared")
+    st = memory->get("pipeline_status", "shared")
+    print("shared:", st)   # running
+
+
+    /* PERSISTENT — sobrevive reinicios (archivo .bin) */
+    memory->store("model_version", "llama3-v1", "persistent")
+    memory->store("total_runs",    "42",        "persistent")
+    memory->persist("tmp/persist/config.bin")   # guarda a disco
+    # --- en la próxima ejecución ---
+    memory->load("tmp/persist/config.bin")      # carga de disco
+    v = memory->get("model_version", "persistent")
+    print("persistent:", v)   # llama3-v1
+
+
+    /* SEMANTIC — búsqueda por significado (archivo HNSW) */
+    memory->index("El sol es una estrella",       "astronomia")
+    memory->index("Python es un lenguaje",        "programacion")
+    memory->index("Los gatos son mamiferos",      "biologia")
+    memory->sem_persist("tmp/persist/knowledge.idx")  # guarda índice
+    # --- en la próxima ejecución ---
+    memory->sem_load("tmp/persist/knowledge.idx")     # carga índice
+    results = memory->search("astros y planetas", 2)
+    for r in results {
+        print(r["text"], "→ score:", r["score"])
+    }
+    # El sol es una estrella → score: 0.82
+}

@@ -1,0 +1,45 @@
+main {
+
+    text = "Hola Mundo 123"
+
+    # Buscar
+    _match  = text.match('\d+')
+    print("match: ",_match)
+    all    = text.find_all('[A-Z][a-z]+') # todos -> ["Hola", "Mundo"]
+    print("match: ",all)
+
+    # Reemplazar
+    clean  = text.replace('\d+', '')      # -> "Hola Mundo "
+    print("clean: ",clean)
+    clean2 = text.replace('\s+', '_')     # -> "Hola_Mundo_123"
+    print("clean2: ",clean2)
+
+    # Split
+    parts  = text.split('\s+')            # ["Hola", "Mundo", "123"]
+    print("parts: ", parts)
+
+    # Test
+    ok     = text.test('^Hola')           # true/false
+    print("ok: ", ok)
+
+    num = 123
+    text = f"Hola Mundo {num*2} axon v0.3"
+    print("text: ",text)
+
+    # Patrones: usar [0-9] [A-Z] [a-z] [ ]+ en lugar de \\d \\s \\w
+    # (o usar \\d+ con doble backslash en el .axon)
+
+    text.match("[0-9]+")          # "123"        primer match
+    text.find_all("[A-Za-z]+")    # lista de todos los matches
+    text.replace("[0-9]+", "NUM") # "Hola Mundo NUM axon vNUM.NUM"
+    text.split("[ ]+")            # ["Hola","Mundo","123","axon","v0.3"]
+    text.test("^Hola")            # true
+    text.sub("[0-9]+", "X", 1)    # primera ocurrencia solo
+    print("JA" * 3)
+
+    z = {}
+    z['us'] = [1,2,3]
+    z['name'] = {'u': 'dario'}
+    print(z)
+    print(typeof(z))
+}

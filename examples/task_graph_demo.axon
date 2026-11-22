@@ -1,0 +1,151 @@
+# ============================================================
+#  examples/task_graph_demo.axon
+#
+#  Demonstrates:
+#   • task_graph dentro de un agente
+#   • io blocks por tarea (grpc, socket, ultrasonic, next_task)
+#   • inputs y outputs entre tareas del mismo agente
+#   • comunicación entre agentes vía grafo de nivel superior
+# ============================================================
+
+import session
+import memory
+
+flow AnalysisPipeline {
+    version   = "1.0"
+    session   = session.new()
+    telemetry = true
+    input     = "Analyze Q4 sales data and broadcast insights"
+}
+
+# ── Agente con task_graph interno ────────────────────────────
+agent DataProcessor {
+    provider  ollama
+    model     llama3
+    session   = flow.session
+
+    memory {
+        runtime  = enabled
+        session  = enabled
+        semantic = enabled
+    }
+
+    validation {
+        confidence  > 0.80
+        format      = json
+        max_retries = 2
+        on_fail     = retry
+    }
+
+    # ── Tarea 1: recibe datos desde gRPC externo ──────────────
+    task Ingest {
+        input  = flow.input
+        output = json
+
+        io {
+            receive = grpc("data-service:50051/DataService/StreamSales")
+            emit    = next_task
+        }
+    }
+
+    # ── Tarea 2: transforma los datos ─────────────────────────
+    task Transform {
+        input  = Ingest.output
+        output = dataframe
+
+        io {
+            receive = next_task
+            emit    = next_task
+        }
+    }
+
+    # ── Tarea 3: valida y emite al siguiente agente vía socket ─
+    task Validate {
+        input  = Transform.output
+        output = json
+
+        io {
+            receive = next_task
+            emit    = socket("reviewer-service:9000")
+        }
+    }
+
+    # ── Tarea 4: broadcast al mesh físico (ultrasónico) ───────
+    task Broadcast {
+        input  = Validate.output
+        output = json
+
+        io {
+            receive = next_task
+            emit    = ultrasonic
+        }
+    }
+
+    # ── Grafo interno de tareas ───────────────────────────────
+    task_graph {
+        Ingest    -> Transform  [on_success]
+        Ingest    -> Ingest     [on_fail, max_retries = 2]
+
+        Transform -> Validate   [on_success]
+        Transform -> Ingest     [on_fail, max_retries = 1]
+
+        Validate  -> Broadcast  [on_success]
+        Validate  -> Transform  [condition = "confidence < 0.7"]
+
+        Broadcast -> done
+    }
+
+    main {
+        if flow.input.isempty() {
+            raise "InputError: flow input required"
+        }
+
+        # Ejecuta el grafo interno de tareas
+        run task_graph
+    }
+}
+
+# ── Agente revisor: recibe por socket ────────────────────────
+agent Reviewer {
+    provider  anthropic
+    model     "claude-3-5-sonnet"
+    session   = flow.session
+
+    memory {
+        runtime = enabled
+        session = enabled
+    }
+
+    validation {
+        confidence  > 0.90
+        max_retries = 1
+        on_fail     = flag
+    }
+
+    task Review {
+        input  = __input__
+        output = json
+
+        io {
+            receive = socket("reviewer-service:9000")
+            emit    = next_task
+        }
+    }
+
+    task_graph {
+        Review -> done [on_success]
+        Review -> Review [on_fail, max_retries = 1]
+    }
+
+    main {
+        run task_graph
+    }
+}
+
+# ── Flow graph de nivel superior ─────────────────────────────
+graph {
+    DataProcessor -> Reviewer  [on_success]
+    DataProcessor -> DataProcessor [on_fail, max_retries = 1]
+    Reviewer      -> done      [on_success]
+    Reviewer      -> DataProcessor [condition = "confidence < 0.85"]
+}
