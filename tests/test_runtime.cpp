@@ -52,17 +52,17 @@ void test_graph_add_nodes() {
 
 void test_graph_add_edges() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"B", "C", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"C"}, true, false, 0, ""});
     ASSERT(g.node_count() == 3);
     ASSERT(g.edge_count() == 2);
 }
 
 void test_graph_bfs() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"A", "C", true, false, 0, ""});
-    g.add_edge({"B", "D", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"A"}, {"C"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"D"}, true, false, 0, ""});
 
     auto order = g.bfs({"A"});
     ASSERT(order.size() == 4);
@@ -71,8 +71,8 @@ void test_graph_bfs() {
 
 void test_graph_dfs() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"B", "C", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"C"}, true, false, 0, ""});
 
     auto order = g.dfs({"A"});
     ASSERT(order.size() == 3);
@@ -81,9 +81,9 @@ void test_graph_dfs() {
 
 void test_graph_topological_sort() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"B", "C", true, false, 0, ""});
-    g.add_edge({"A", "C", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"C"}, true, false, 0, ""});
+    g.add_edge({{"A"}, {"C"}, true, false, 0, ""});
 
     auto order = g.topological_order();
     ASSERT(order.size() == 3);
@@ -99,23 +99,23 @@ void test_graph_topological_sort() {
 
 void test_graph_no_cycle() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"B", "C", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"C"}, true, false, 0, ""});
     ASSERT(!g.has_cycle());
 }
 
 void test_graph_cycle_detected() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"B", "C", true, false, 0, ""});
-    g.add_edge({"C", "A", false, true, 2, ""});   // retry cycle
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"B"}, {"C"}, true, false, 0, ""});
+    g.add_edge({{"C"}, {"A"}, false, true, 2, ""});   // retry cycle
     ASSERT(g.has_cycle());
 }
 
 void test_graph_successors() {
     GraphEngine g;
-    g.add_edge({"A", "B", true, false, 0, ""});
-    g.add_edge({"A", "C", true, false, 0, ""});
+    g.add_edge({{"A"}, {"B"}, true, false, 0, ""});
+    g.add_edge({{"A"}, {"C"}, true, false, 0, ""});
     auto s = g.successors({"A"});
     ASSERT(s.size() == 2);
 }

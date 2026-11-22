@@ -3024,47 +3024,50 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                 return Value::from(msg);
             }
 
-        // Build absolute paths from current working directory
-        #if defined(_WIN32)
-            char cwd[4096]; GetCurrentDirectoryA(sizeof(cwd), cwd);
-            std::string out_base = std::string(cwd) + "\\axon_ocr_tmp";
-            std::string out_file = out_base + ".txt";
-            std::string bat_file = out_base + ".bat";
+            // Resolve the working directory without a fixed-size path buffer.
+            std::error_code path_error;
+            const auto cwd = std::filesystem::current_path(path_error);
+            if (path_error) return Value::from(std::string("[ocr] cannot resolve working directory"));
+            const std::string out_base = (cwd / "axon_ocr_tmp").string();
+            const std::string out_file = out_base + ".txt";
+            auto cleanup = [&](const std::string& path) {
+                std::error_code cleanup_error;
+                std::filesystem::remove(path, cleanup_error);
+                if (cleanup_error)
+                    log(AXON_LOG_WARN, "[ocr] cannot remove " + path + ": " + cleanup_error.message());
+            };
 
-            // Write .bat — avoids cmd.exe quoting issues with spaces in path
+        #if defined(_WIN32)
+            const std::string bat_file = out_base + ".bat";
+            // Write .bat — avoids cmd.exe quoting issues with spaces in path.
             std::ofstream bat(bat_file);
             bat << "@echo off\n";
             bat << tess_cmd() << " \""
                 << img_path << "\" \""
                 << out_base << "\" -l " << lang << "\n";
             bat.close();
-
-            // Execute and cleanup bat
-            std::system(("\"" + bat_file + "\" >NUL 2>&1").c_str());
-            std::system(("del \"" + bat_file + "\" >NUL 2>&1").c_str());
+            if (!bat) {
+                cleanup(bat_file);
+                return Value::from(std::string("[ocr] cannot write command file"));
+            }
+            const int ocr_status = std::system(("\"" + bat_file + "\" >NUL 2>&1").c_str());
+            cleanup(bat_file);
         #else
-            char cwd[4096]; getcwd(cwd, sizeof(cwd));
-            std::string out_base = std::string(cwd) + "/axon_ocr_tmp";
-            std::string out_file = out_base + ".txt";
-
-            std::string cmd = tess_cmd()
+            const std::string cmd = tess_cmd()
                 + " \"" + img_path + "\""
                 + " \"" + out_base + "\""
                 + " -l " + lang + " >/dev/null 2>&1";
-            std::system(cmd.c_str());
+            const int ocr_status = std::system(cmd.c_str());
         #endif
+            if (ocr_status != 0) {
+                cleanup(out_file);
+                return Value::from(std::string("[ocr] Tesseract execution failed"));
+            }
 
-            // Read output
             std::ifstream rf(out_file);
             if (!rf) return Value::from(std::string("[ocr] no output file"));
             std::ostringstream oss; oss << rf.rdbuf(); rf.close();
-
-            // Cleanup output file
-        #if defined(_WIN32)
-            std::system(("del \"" + out_file + "\" >NUL 2>&1").c_str());
-        #else
-            std::system(("rm -f \"" + out_file + "\"").c_str());
-        #endif
+            cleanup(out_file);
 
             if (oss.str().empty()) return Value::from(std::string("[ocr] no text detected"));
             log(AXON_LOG_INFO, "ocr->read: " + img_path + " [" + lang + "]");
