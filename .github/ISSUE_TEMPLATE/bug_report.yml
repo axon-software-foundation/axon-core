@@ -1,4 +1,4 @@
-name: Bug report / Error
+name: Bug report
 description: Report a reproducible problem in Axon Core.
 title: "[Bug]: "
 body:

@@ -1,31 +1,23 @@
-# Docker para Linux
+# Linux builds with Docker
 
-Esta ruta prepara compilación/pruebas e imagen de ejecución Linux. Requiere
-Docker con contenedores Linux y Compose v2 para los comandos compose. En
-Windows puede usarse Docker Desktop con backend Linux/WSL2. No genera un
-paquete Windows ni macOS. No hay imágenes publicadas todavía.
+Requires Docker using Linux containers; Compose commands require Compose v2. Windows may use
+Docker Desktop's Linux/WSL2 backend. This path does not build Windows or macOS binaries.
+No registry image is published by the workflow.
 
-## Compilar y probar el código montado
+## Build and test mounted source
 
-Desde la raíz, en PowerShell, Git Bash o una terminal Linux:
+From the repository root:
 
 ```bash
 docker compose run --build --rm build
 docker compose run --rm test
 ```
 
-La compilación se guarda en un volumen Docker, no en build-alpha de Windows.
-No mezcles caches CMake de plataformas distintas. No ejecutes build y test
-simultáneamente sobre el mismo volumen. Los errores se muestran completos;
-un fallo del compilador o de CTest devuelve un código distinto de cero.
+Builds use the `axon-linux-build` Docker volume rather than Windows build-alpha. Do not mix CMake
+caches across platforms or run build/test simultaneously on the same volume. Compiler/test failures
+return nonzero. Open a development shell with `docker compose run --build --rm shell`.
 
-Para abrir un shell del entorno:
-
-```bash
-docker compose run --build --rm shell
-```
-
-## Crear una imagen de ejecución con pruebas obligatorias
+## Build the tested runtime image
 
 ```bash
 docker build --target runtime -t axon:dev .
@@ -34,52 +26,42 @@ docker run --rm axon:dev test
 docker run --rm axon:dev run /opt/axon/share/axon/examples/validation/tasks.axon
 ```
 
-El stage build ejecuta check-release.sh, el empaquetador, CTest y las pruebas
-del archivo nativo extraído. La imagen runtime contiene los tres ejecutables,
-bibliotecas del sistema, ejemplos, documentación y avisos de licencia. Usa un
-usuario sin privilegios; no incluye compilador, repositorio fuente, Ollama,
-pesos de modelos ni Tesseract. Los ejemplos LLM necesitan un servicio accesible
-según la configuración que soporte el provider; localhost dentro del contenedor
-no es localhost del host.
+The build stage runs version consistency, CTest and native archive/extracted-package checks.
+Runtime includes the CLI, both suites, system libraries, examples, documents and notices. It runs as
+a non-root user without compiler/source, Ollama, models or Tesseract. Provider examples need an accessible
+service supported by the current adapter; container localhost is not host localhost.
 
-Para tu propio script, monta solo la carpeta necesaria como lectura. PowerShell:
+Mount only the necessary directory, preferably read-only. PowerShell:
 
 ```powershell
 docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work,readonly" axon:dev run /work/examples/validation/tasks.axon
 ```
 
-Git Bash convierte rutas para programas Windows; para el mismo montaje:
+Git Bash, avoiding automatic conversion of container paths:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm --mount "type=bind,source=$(pwd -W),target=/work,readonly" axon:dev run /work/examples/validation/tasks.axon
 ```
 
-En Linux:
+Linux:
 
 ```bash
 docker run --rm --mount "type=bind,source=$PWD,target=/work,readonly" axon:dev run /work/examples/validation/tasks.axon
 ```
 
-Un montaje readonly impide escribir allí, pero no convierte scripts hostiles
-en seguros. Consulta SECURITY.md; no montes credenciales ni datos sensibles.
+Read-only mounts do not make hostile scripts safe. See [SECURITY.md](SECURITY.md).
 
-## Exportar el archivo de validación Linux
+## Export the native archive
 
-Con BuildKit/buildx y salida local:
+With BuildKit/buildx local output:
 
 ```bash
 docker build --target artifacts --output type=local,dest=dist-docker .
 ```
 
-El .tar.gz y su .sha256 pertenecen al Linux/arquitectura del build. No se
-promete aún portabilidad entre distribuciones. Una imagen multiarquitectura
-requiere builds y pruebas para cada arquitectura antes de anunciar soporte.
+The `.tar.gz` and `.sha256` target the build's Linux architecture/system libraries. They do not
+establish cross-distribution compatibility or a multi-architecture image.
 
-## Estado de validación
-
-Los archivos se revisan estáticamente en esta entrega. Docker no está
-instalado en el entorno de revisión; falta ejecutar la imagen y Compose.
-El job Linux Docker de CI realizará el build y las pruebas cuando se suba el
-workflow. Una configuración preparada no es una imagen validada/publicada.
-Las bases usan etiquetas ubuntu:24.04 actualizables, no digest inmutable;
-no se declara reproducibilidad bit a bit. Dependabot revisa cambios de base.
+The Linux Docker CI job passed at baseline `7a1537f`, including runtime version/suites/task execution.
+That job does not exercise all Compose bind-mount examples; those remain environment-specific commands.
+The Ubuntu 24.04 base uses a mutable tag rather than a pinned digest; bit-for-bit reproducibility is not claimed.

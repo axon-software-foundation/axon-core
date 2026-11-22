@@ -169,6 +169,13 @@ if(BUILD_TESTING)
         set_tests_properties(cli.${case_name} PROPERTIES TIMEOUT 20)
     endforeach()
     set_tests_properties(runtime interpreter PROPERTIES TIMEOUT 30)
+    add_test(NAME docs.examples
+        COMMAND ${CMAKE_COMMAND}
+            "-DAXON_EXE=$<TARGET_FILE:axon>"
+            "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/docs-cases"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_docs.cmake")
+    set_tests_properties(docs.examples PROPERTIES TIMEOUT 180)
 endif()
 
 # ── Windows: fix output directories ──────────────────────────
@@ -185,9 +192,9 @@ endif()
 # Developer install remains available; public archives use axon_portable instead.
 install(TARGETS axon axon_test_runtime axon_test_interp DESTINATION bin)
 install(DIRECTORY runtime/include/ runtime/interfaces/ DESTINATION include/axon)
-install(FILES LICENSE.txt VERSION THIRD_PARTY_NOTICES.md DESTINATION share/axon)
+install(FILES LICENSE VERSION THIRD_PARTY_NOTICES.md DESTINATION share/axon)
 install(DIRECTORY licenses/ DESTINATION share/axon/licenses)
-install(FILES docs/LANGUAGE.md DESTINATION share/axon/docs)
+install(FILES docs/LANGUAGE.md docs/MODULES.md DESTINATION share/axon/docs)
 install(DIRECTORY examples/ DESTINATION share/axon/examples)
 # Portable packages use a curated payload and validate the extracted archive.
 include(cmake/Portable.cmake)

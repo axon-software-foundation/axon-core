@@ -1,4 +1,4 @@
-> Documento histórico/de diseño: las fases y capacidades descritas no acreditan implementación ni validación. El estado vigente se mantiene en [ROADMAP.md](ROADMAP.md).
+> Historical design record. Phase numbers, example APIs and proposed versions below are not the current release contract. See [ROADMAP.md](ROADMAP.md) and the current language reference for implementation status.
 
 # Axon RFC — Version History
 

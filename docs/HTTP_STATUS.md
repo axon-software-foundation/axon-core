@@ -1,23 +1,22 @@
-# Estado de HTTP y comunicaciones
+# HTTP and communications status
 
-Fecha de revisión: 19 de noviembre de 2026.
-
-## Resultado de la validación
-
-En el Core recibido no hay implementación pública de `http->get`, `http->post` ni `http->json`. Esas operaciones aparecen anunciadas en el roadmap de la web. El adaptador Ollama contiene un cliente HTTP específico para sus llamadas; no constituye un módulo HTTP general del lenguaje.
-
-Antes de esta corrección, `http->get(...)` podía terminar tratado como una llamada a un agente inexistente y devolver null. Ahora `http->...` produce un error explícito:
+In `0.4.0-alpha.1`, there is no public implementation of `http->get`, `http->post` or `http->json`.
+Calls produce an explicit error containing:
 
 ```text
 HTTP module is not implemented in this Core snapshot
 ```
 
-Las pruebas comprueban esa ausencia de forma controlada. **No verifican peticiones HTTP/HTTPS reales ni certifican el módulo como funcional.** No se añadieron dependencias de red, respuestas simuladas a producción ni un cliente HTTP incompleto.
+Tests assert this absence; they do not send requests or certify HTTP/HTTPS support.
+The Ollama adapter and semantic-memory client contain specialized HTTP code, not a general language module.
 
-## Implementación futura acordada
+## Future implementation
 
-El bloque de comunicaciones e integraciones incluirá HTTP/REST, gRPC, WebSockets y el módulo MCP. MCP tendrá un contrato propio de protocolo e integración; no será un alias de HTTP/REST o gRPC.
+HTTP needs a specified contract for arguments, response values, status/headers/body, JSON, certificate
+verification, deadlines, limits, redirects and errors. Tests should use a real local server to cover GET,
+POST, JSON, error status, connection failure, incomplete responses and limits. TLS tests need controlled
+certificates and active verification, not disabled checks.
 
-Para HTTP se debe fijar el contrato antes de implementarlo: firmas, tipos de entrada, representación de respuesta, status/cabeceras/body, JSON, HTTPS y certificados, timeouts, límites, redirects y errores. Una suite con servidor local debe verificar GET, POST, JSON, códigos de error, conexión fallida, respuestas incompletas y límites. Las pruebas TLS necesitarán certificados de test y verificación activa; no se desactivará la verificación para aparentar compatibilidad.
-
-Para MCP queda definir rol cliente/servidor, versión de protocolo, capacidades, transporte, ciclo de conexión, autorización, cancelación, errores y compatibilidad. La implementación de este módulo y de HTTP se hará en un bloque posterior, como pidió Darío. Este parche solo registra el alcance y evita anunciar HTTP como disponible.
+gRPC, WebSockets and MCP belong to the communications roadmap. MCP needs its own protocol version,
+role/capabilities, transport, connection lifecycle, authorization, cancellation and errors; it is not
+an alias for HTTP or gRPC. These integrations remain pending and are not implemented by this documentation change.

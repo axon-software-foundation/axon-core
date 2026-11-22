@@ -1,12 +1,10 @@
-# Probar el portable
+# Test a portable candidate
 
-Este es un candidato local de Axon alpha. No requiere modificar el PATH ni
-instalar Axon globalmente. Conserva toda la carpeta extraída, incluido bin/.
+Keep the entire extracted folder, including `bin/`; the package is not just the main executable.
+It does not require a global PATH installation. Use a folder outside the source checkout and,
+for Windows acceptance, preferably a second Windows x64 computer without MSYS2/GCC/Git.
 
-## Windows x64 — PowerShell
-
-Extrae el ZIP en una carpeta fuera del proyecto; preferiblemente en otro
-Windows 10/11 x64 sin MSYS2, GCC ni Git. Desde la raíz extraída:
+## Windows PowerShell, from the extracted root
 
 ```powershell
 .\bin\axon.exe version
@@ -18,21 +16,17 @@ Windows 10/11 x64 sin MSYS2, GCC ni Git. Desde la raíz extraída:
 .\bin\axon.exe run .\examples\flows.axon
 ```
 
-La versión debe coincidir con VERSION, las dos suites deben pasar y los
-ejemplos deben imprimir PASS. `axon test` necesita los dos ejecutables de
-pruebas incluidos junto a axon.exe. No copies solamente el ejecutable principal.
-
-Para probar el modelo real, instala Ollama aparte y descarga llama3.2:
+Version must match VERSION; both suites and the PASS examples must succeed. `axon test` requires
+both test executables beside `axon.exe`. Optional real generation requires a separately installed,
+running Ollama service and `ollama pull llama3.2`:
 
 ```powershell
-ollama pull llama3.2
 .\bin\axon.exe run .\examples\validation\ollama_tasks.axon
 ```
 
-Ollama debe estar iniciado. Sin servicio local, el ejemplo de LLM no acredita
-una prueba real del provider. Las pruebas anteriores no lo necesitan.
+Skipped calls/passthrough do not establish model integration.
 
-## Linux — archivo de validación nativo
+## Linux native validation archive
 
 ```bash
 ./bin/axon version
@@ -40,19 +34,19 @@ una prueba real del provider. Las pruebas anteriores no lo necesitan.
 ./bin/axon run examples/validation/tasks.axon
 ```
 
-El archivo Linux depende de las bibliotecas del sistema de compilación. No
-declara todavía un mínimo de glibc ni portabilidad entre distribuciones.
+System libraries are not bundled; a minimum glibc/distribution compatibility baseline is not established.
+There is no macOS archive target yet.
 
-## Integridad y alcance
+## Verify integrity
 
-Junto al archivo comprimido se genera un archivo .sha256 con el hash del
-comprimido. En Git Bash, desde la carpeta donde están ambos:
+From the directory containing the archive and its checksum, in Git Bash:
 
 ```bash
 sha256sum -c axon-v0.4.0-alpha.1-windows-x64.zip.sha256
 ```
 
-MANIFEST.sha256 contiene hashes de los archivos internos; desde la raíz
-extraída, Git Bash/Linux permite comprobarlos con `sha256sum -c MANIFEST.sha256`.
-Un checksum detecta diferencias de bytes; la firma de código queda pendiente.
-Consulta RELEASE_NOTES.md para las limitaciones de esta alpha.
+From the extracted root, Git Bash/Linux can check `sha256sum -c MANIFEST.sha256`.
+`BUILD_INFO.txt` records compiler/platform and source commit/clean state when available.
+A new build needs its own checksum and acceptance; do not reuse an earlier candidate's hash.
+Checksums verify bytes, not publisher identity. Signing remains pending.
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for limitations.

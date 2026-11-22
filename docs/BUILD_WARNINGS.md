@@ -1,52 +1,24 @@
-# Política de advertencias del build
+# Compiler warning policy
 
-## Código de Axon
+`AXON_WARNINGS_AS_ERRORS` defaults to ON: enabled warnings fail GCC/Clang builds with `-Werror`
+and MSVC builds with `/WX`. GCC/Clang retain `-Wall -Wextra`; existing targeted compiler flags remain.
+Do not add global warning suppression to make CI pass. Temporary toolchain diagnosis may use OFF,
+but release acceptance must explicitly restore ON, including in existing CMake caches.
 
-Se mantienen -Wall y -Wextra en GCC/Clang, junto con las opciones existentes.
-AXON_WARNINGS_AS_ERRORS está activado por defecto: añade -Werror en GCC/Clang
-y /WX en MSVC. Una advertencia habilitada en el código propio impide completar
-el build; no se ha añadido -w ni una desactivación global de advertencias.
+HNSWlib/stb include directories are SYSTEM headers; their implementation is not thereby proven correct.
+The local ZIP reader under `third_party/miniz` is not classified as SYSTEM. Vendored code retains its notices.
+Earlier cleanup removed unused code/variables, protected MSVC-only pragmas, clarified PDF control flow
+and replaced a truncating ZIP filename copy with an explicitly terminated buffer copy.
 
-Para diagnóstico temporal de un toolchain puede configurarse
-`-DAXON_WARNINGS_AS_ERRORS=OFF`. Esto conserva las advertencias y permite
-compilar, pero no corresponde a la comprobación estricta de esta entrega.
-Un cache que ya tenga esa opción en OFF debe reconfigurarse explícitamente en ON.
+The cross-platform CI fix also checks OCR working-directory/process results and uses native filesystem
+cleanup; graph tests initialize nested `AgentID` aggregates explicitly; Apple libc++ options apply only
+to C++ compilation/linking, not vendored C sources. Do not reintroduce the old ignored `getcwd`/`system` returns.
 
-## Limpieza aplicada
+The baseline CI at `7a1537f` passed Linux GCC Debug/Release, Windows UCRT64 Debug/Release,
+experimental Apple Clang and Docker. Local Linux Release was also tested with fortified headers
+(`-D_FORTIFY_SOURCE=2`) and strict warnings. This does not certify MSVC or every compiler/version.
 
-- Pragmas de enlace y diagnóstico exclusivos de MSVC protegidos con _MSC_VER.
-- Eliminadas funciones internas sin llamadas (decoder base64 duplicado y
-  extractor XML sin uso), así como variables locales sin uso.
-- Separadas instrucciones y aclarados bloques en el lector PDF, conservando
-  las condiciones y el orden de ejecución.
-- En el pequeño lector ZIP local, sustituido strncpy por una copia de los
-  buffers de igual capacidad y terminación NUL explícita del destino.
-
-## Dependencias externas
-
-HNSWlib y stb se incluyen por rutas SYSTEM de CMake. El compilador los trata
-como encabezados externos y excluye sus diagnósticos habituales de la salida
-del código propio. Eso no corrige su implementación ni demuestra ausencia de
-problemas en esas bibliotecas; sus revisiones se gestionan por separado.
-
-Los archivos de HNSWlib/stb no se modifican. La excepción es el lector ZIP
-local en third_party/miniz, que sí recibe la corrección indicada arriba y no
-se clasifica como encabezado SYSTEM. zlib conserva su configuración existente.
-
-## Verificación de esta entrega
-
-- Build Release completo con GCC 14.2 en Linux, con cero advertencias y -Werror.
-- 22/22 CTest, suites de 31 casos runtime y 78 del intérprete.
-- Archivo nativo extraído y ejecutado mediante axon_portable.
-- Comprobación específica de nombres ZIP vacíos, cortos y de 259 caracteres.
-- Prueba de que los flags reales del proyecto rechazan una variable sin uso.
-
-Falta repetir la compilación estricta con GCC 16.2 en Windows. Si esa versión
-señala una advertencia adicional, se debe revisar su diagnóstico y corregirla.
-MSVC y Clang no se han validado en esta entrega.
-
-Desde Git Bash, después de aplicar este parche sobre el estado con la
-corrección de scheduler-shutdown:
+Windows Git Bash packaging check:
 
 ```bash
 bash scripts/package.sh -G Ninja \
@@ -55,5 +27,5 @@ bash scripts/package.sh -G Ninja \
   -DAXON_WARNINGS_AS_ERRORS=ON
 ```
 
-El cambio de flags y de rutas de inclusión hace que Ninja recompile las
-unidades afectadas. Se esperan 22/22 CTest y PASS del paquete extraído.
+If a compiler reports another warning, preserve the full diagnostic and fix its cause.
+Runtime failures, Windows application-control blocks and compiler warnings require different diagnoses.

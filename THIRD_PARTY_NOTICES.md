@@ -1,6 +1,6 @@
 # Third-party notices
 
-Axon's own code uses the MIT license in LICENSE.txt. This does not replace
+Axon's own code uses the MIT license in LICENSE. This does not replace
 the licenses of embedded components or toolchain runtime code.
 
 | Component | Source | License / distributed text |

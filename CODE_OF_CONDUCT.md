@@ -1,23 +1,19 @@
-# Convivencia en la comunidad
+# Community code of conduct
 
-Queremos un espacio de colaboración respetuoso para personas con distintas
-experiencias, idiomas e identidades. Se aplica a issues, PR, revisiones,
-discusiones y otros canales oficiales del proyecto.
+We welcome contributors with different backgrounds, languages and identities. This policy applies
+to issues, pull requests, reviews, discussions and other official project spaces.
 
-- Critica ideas y código con argumentos y ejemplos, sin ataques personales.
-- Explica contexto, reconoce errores y respeta el tiempo de quien colabora.
-- No se permiten acoso, discriminación, amenazas, contenido sexual dirigido a
-  participantes, publicación de datos privados ni spam.
-- No publiques credenciales, información personal o detalles de incidentes
-  sensibles en conversaciones públicas.
+- Discuss ideas and code with reasons and examples, without personal attacks.
+- Explain context, acknowledge mistakes and respect contributors' time.
+- Harassment, discrimination, threats, sexual content directed at participants, doxxing and spam
+  are not allowed.
+- Do not publish credentials, personal information or sensitive incident details in public threads.
 
-Los maintainers pueden moderar contenido y aplicar advertencias, restricciones
-temporales o exclusión según la gravedad y reincidencia. La persona afectada
-puede pedir revisión; si el reporte involucra a un maintainer, debe revisarlo
-otro responsable disponible, evitando conflictos de interés.
+Maintainers may moderate content and issue warnings, temporary restrictions or exclusion according
+to severity and repetition. Affected participants may request review. Reports involving a maintainer
+should be handled by another available maintainer to avoid conflicts of interest.
 
-Para solicitar un canal privado de moderación, usa el contacto privado indicado
-por la organización. Si aún no aparece, abre un issue que solicite únicamente
-contacto privado, sin describir el incidente ni identificar a otras personas.
-Los responsables deben establecer ese canal antes de solicitar detalles.
-Para vulnerabilidades técnicas, sigue SECURITY.md.
+Use the organization's published private contact for moderation reports. If none is available,
+open an issue requesting only a private contact, without describing the incident or identifying
+participants. Maintainers must establish that channel before requesting details.
+For technical vulnerabilities, follow [SECURITY.md](SECURITY.md).
