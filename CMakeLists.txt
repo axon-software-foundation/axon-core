@@ -157,7 +157,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_unavailable)
+            task_contract http_unavailable function_arity imported_function_arity)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"

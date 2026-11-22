@@ -2044,6 +2044,18 @@ Value Interpreter::eval_call(AxonNode* node, EnvPtr env) {
         if (it_n != callee.dict.end()) {
             AxonNode* fn_node = (AxonNode*)(uintptr_t)(it_n->second.n);
             if (fn_node) {
+                const size_t expected = fn_node->as.func_def.params.count;
+                const size_t actual = node->as.func_call.args.count;
+                if (actual != expected) {
+                    const std::string label = fn_node->as.func_def.name
+                        ? "function '" + std::string(fn_node->as.func_def.name) + "'"
+                        : "anonymous function";
+                    // Reject before evaluating arguments or entering the body.
+                    throw RaiseSignal{"ArityError: " + label + " expects "
+                        + std::to_string(expected) + " argument(s), got "
+                        + std::to_string(actual) + " at line "
+                        + std::to_string(node->loc.line)};
+                }
                 // Use captured closure env, fall back to caller env
                 EnvPtr base_env = env;
                 auto it_cid = callee.dict.find("__closure_id__");
@@ -2059,9 +2071,7 @@ Value Interpreter::eval_call(AxonNode* node, EnvPtr env) {
                     AxonNode* param = fn_node->as.func_def.params.items[i];
                     std::string pname = param && param->as.identifier.name
                                         ? param->as.identifier.name : "";
-                    Value arg = (i < node->as.func_call.args.count)
-                                ? eval(node->as.func_call.args.items[i], env)
-                                : Value::null();
+                    Value arg = eval(node->as.func_call.args.items[i], env);
                     fn_env->set(pname, arg);
                 }
 
