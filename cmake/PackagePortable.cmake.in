@@ -110,11 +110,15 @@ endif()
 # Content hashes allow checking individual extracted files, including binaries.
 file(GLOB_RECURSE payload LIST_DIRECTORIES false RELATIVE "${root}" "${root}/*")
 list(SORT payload)
-file(WRITE "${root}/MANIFEST.sha256" "")
+set(manifest "")
 foreach(path IN LISTS payload)
     file(SHA256 "${root}/${path}" hash)
-    file(APPEND "${root}/MANIFEST.sha256" "${hash}  ${path}\n")
+    string(APPEND manifest "${hash}  ${path}\n")
 endforeach()
+
+# GNU sha256sum treats a CR as part of the filename. Force LF on every host.
+file(CONFIGURE OUTPUT "${root}/MANIFEST.sha256" CONTENT "${manifest}"
+    @ONLY NEWLINE_STYLE LF)
 
 # Archive, extract, then run from a separate working directory with spaces.
 set(candidate "${build}/${name}.${extension}.candidate")
@@ -171,7 +175,8 @@ endif()
 file(MAKE_DIRECTORY "${dist}")
 file(SHA256 "${candidate}" archive_hash)
 configure_file("${candidate}" "${dist}/${name}.${extension}" COPYONLY)
-file(WRITE "${dist}/${name}.${extension}.sha256" "${archive_hash}  ${name}.${extension}\n")
+file(CONFIGURE OUTPUT "${dist}/${name}.${extension}.sha256"
+    CONTENT "${archive_hash}  ${name}.${extension}\n" @ONLY NEWLINE_STYLE LF)
 message(STATUS "PASS: extracted portable package and self-tests")
 message(STATUS "Archive: ${dist}/${name}.${extension}")
 message(STATUS "SHA256:  ${archive_hash}")
