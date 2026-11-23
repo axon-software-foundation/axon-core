@@ -1,0 +1,13 @@
+# No provider or external tools required.
+flow Demo { debug=false timeout=5 }
+func calculate(value) { sleep(0.05) return value * 2 }
+main {
+    parallel {
+        left=calculate(10)
+        right=calculate(20)
+    }
+    if left != 20 { raise "left result was lost" }
+    if right != 40 { raise "right result was lost" }
+    print("left=",left," right=",right)
+    print("PASS parallel")
+}

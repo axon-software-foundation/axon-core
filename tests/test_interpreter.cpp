@@ -1132,6 +1132,210 @@ void test_graph_unhandled_provider_error() {
     expect_execution_error("agent A { task T { prompt=[\"generate\"] } }", "ProviderError:");
 }
 
+class ParallelProvider final : public IProviderAdapter {
+public:
+    std::atomic<int> active{0}, peak{0}, arrivals{0};
+    bool concurrent = true, rendezvous = true, fail = false;
+    std::string provider_name() const override { return "ollama"; }
+    bool is_available() override { return true; }
+    bool supports_concurrent_requests() const override { return concurrent; }
+    LLMResponse complete(const LLMRequest& request) override {
+        const int now = active.fetch_add(1) + 1;
+        struct Leave { std::atomic<int>& active; ~Leave() { --active; } } leave{active};
+        int old = peak.load();
+        while (old < now && !peak.compare_exchange_weak(old, now)) {}
+        ++arrivals;
+        std::string input;
+        for (const auto& message : request.messages) if (message.role == "user") input = message.content;
+        if (fail && input == "FAIL") throw std::runtime_error("parallel fixture failure");
+        if (fail) request.control->sleep(10);
+        const auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (rendezvous && arrivals.load() < 2) {
+            if (std::chrono::steady_clock::now() > limit) throw std::runtime_error("branches did not overlap");
+            request.control->sleep(0.001);
+        }
+        request.control->sleep(0.005);
+        return LLMResponse{input,1,1,0,"stop"};
+    }
+};
+void test_parallel_real_overlap_and_same_agent_outputs() {
+    auto provider = std::make_shared<ParallelProvider>();
+    ASSERT_EQ(run_recorded(processor("task T { prompt=[\"echo\"] }") + R"(
+        main {
+            parallel { a=Processor("LEFT") b=Processor("RIGHT") }
+            if a != "LEFT" { raise "left input lost" }
+            if b != "RIGHT" { raise "right input lost" }
+            if Processor.T != "RIGHT" { raise "cache merge must follow source order" }
+            return a + b
+        }
+    )",provider).s,std::string("LEFTRIGHT"));
+    ASSERT_TRUE(provider->peak.load() >= 2);
+}
+void test_parallel_pipeline_last_declared_result() {
+    auto provider = std::make_shared<ParallelProvider>();
+    ASSERT_EQ(run_recorded(R"(
+        flow F { debug=false }
+        agent A { task T { input="FIRST" prompt=["echo"] } }
+        agent B { task T { input="LAST" prompt=["echo"] } }
+        agent C { task T {} }
+        main { return "INPUT" >> [A,B] >> C }
+    )",provider).s,std::string("LAST"));
+    ASSERT_TRUE(provider->peak.load() >= 2);
+}
+void test_parallel_variables_are_snapshots() {
+    ASSERT_EQ(run(R"(
+        flow F { debug=false }
+        func increment() { counter=counter+1 return counter }
+        main { counter=0 parallel { a=increment() b=increment() } return a+b+counter }
+    )").n,2.0);
+}
+void test_parallel_container_isolation() {
+    ASSERT_EQ(run(R"(
+        func change(n) { values[0]=n return values[0] }
+        main { values=[0] parallel { a=change(10) b=change(20) } return values[0]+a+b }
+    )").n,30.0);
+}
+void test_parallel_returned_closures() {
+    ASSERT_EQ(run(R"(
+        func make(x) { return (y)=>x*y }
+        main { parallel { a=make(2) b=make(3) } return a(4)+b(4) }
+    )").n,20.0);
+}
+void test_parallel_exported_existing_closure_state() {
+    ASSERT_EQ(run(R"(
+        func expose() { f() return f }
+        main {
+            counter=0
+            f=func() { counter=counter+1 return counter }
+            parallel { a=expose() b=expose() }
+            return a()+b()+f()
+        }
+    )").n,5.0);
+}
+void test_parallel_nested_blocks() {
+    ASSERT_EQ(run(R"(
+        func work(n) { parallel { x=n+1 y=n+2 } return x+y }
+        main { parallel { a=work(2) b=work(5) } return a+b }
+    )").n,20.0);
+}
+void test_parallel_duplicate_targets_source_order() {
+    ASSERT_EQ(run("main { parallel { x=1 x=2 } return x }").n,2.0);
+}
+void test_parallel_empty_and_single() {
+    ASSERT_EQ(run("main { parallel {} parallel { x=42 } return x }").n,42.0);
+}
+void test_parallel_only_top_level_results_are_published() {
+    expect_execution_error("main { parallel { a=1 b=a+1 } }","undefined variable 'a'");
+}
+void test_parallel_shared_memory() {
+    ASSERT_EQ(run(R"(
+        func store(key,value) { memory->store(key,value,"shared") return memory->get(key,"shared") }
+        main {
+            parallel { a=store("left","L") b=store("right","R") }
+            if memory->get("left","shared") != "L" { raise "lost shared write" }
+            return a+b+memory->get("right","shared")
+        }
+    )").s,std::string("LRR"));
+}
+void test_parallel_error_cancels_sibling_and_preserves_bindings() {
+    const auto start=std::chrono::steady_clock::now();
+    ASSERT_EQ(run(R"(
+        func slow() { sleep(10) return 1 }
+        func fail() { raise "parallel failure" }
+        main {
+            a=10 b=20
+            try { parallel { a=slow() b=fail() } } catch err {
+                if err != "parallel failure" { raise "wrong failure" }
+            }
+            return a+b
+        }
+    )").n,30.0);
+    ASSERT_TRUE(std::chrono::steady_clock::now()-start<std::chrono::seconds(2));
+}
+void test_parallel_timeout_cancels_siblings() {
+    const auto start=std::chrono::steady_clock::now();
+    expect_execution_error(R"(
+        flow F { timeout=0.03 debug=false }
+        func slow() { sleep(10) return 1 }
+        main { parallel { a=slow() b=slow() } }
+    )","TimeoutError: flow");
+    ASSERT_TRUE(std::chrono::steady_clock::now()-start<std::chrono::seconds(2));
+}
+void test_parallel_provider_failure_is_not_hidden() {
+    auto provider=std::make_shared<ParallelProvider>(); provider->fail=true;
+    std::string error;
+    const auto start=std::chrono::steady_clock::now();
+    try { run_recorded(processor("task T { prompt=[\"echo\"] }")+"main { parallel { a=Processor(\"SLOW\") b=Processor(\"FAIL\") } }",provider); }
+    catch (const std::exception& caught) { error=caught.what(); }
+    ASSERT_TRUE(error.find("parallel fixture failure")!=std::string::npos);
+    ASSERT_TRUE(std::chrono::steady_clock::now()-start<std::chrono::seconds(2));
+    ASSERT_EQ(provider->active.load(),0);
+}
+void test_parallel_legacy_provider_serialized() {
+    auto provider=std::make_shared<ParallelProvider>(); provider->concurrent=false; provider->rendezvous=false;
+    ASSERT_EQ(run_recorded(processor("task T { prompt=[\"echo\"] }")+"main { parallel { a=Processor(\"L\") b=Processor(\"R\") } return a+b }",provider).s,std::string("LR"));
+    ASSERT_EQ(provider->peak.load(),1);
+}
+void test_parallel_bounded_queue() {
+    auto provider=std::make_shared<ParallelProvider>();
+    std::string program=processor("task T { prompt=[\"echo\"] }")+"main { parallel { ";
+    for (int i=0;i<24;++i) program+="v"+std::to_string(i)+"=Processor(\""+std::to_string(i)+"\") ";
+    program+="} return v0+v23 }";
+    ASSERT_EQ(run_recorded(program,provider).s,std::string("023"));
+    ASSERT_EQ(provider->arrivals.load(),24);
+    ASSERT_TRUE(provider->peak.load()>=2 && provider->peak.load()<=8);
+}
+void test_parallel_active_agent_frame() {
+    ASSERT_EQ(run(R"(
+        agent A { task T {} main { parallel { left=A->T("L") right=A->T("R") } return right } }
+        main { value=A("input") if A.T != "R" { raise "frame/cache mismatch" } return value }
+    )").s,std::string("R"));
+}
+void test_parallel_rejects_control_statements_before_start() {
+    ASSERT_EQ(run(R"(
+        main {
+            x=0
+            try { parallel { x=1 return 9 } } catch err {
+                if err.find("ParallelError:") != 0 { raise "wrong validation error" }
+            }
+            return x
+        }
+    )").n,0.0);
+}
+void test_parallel_print_source_order() {
+    std::ostringstream output;
+    struct RestoreBuffer {
+        std::streambuf* previous;
+        ~RestoreBuffer() { std::cout.rdbuf(previous); }
+    } restore{std::cout.rdbuf(output.rdbuf())};
+    run(R"(
+        flow F { debug=false }
+        func emit_line(value,seconds) { sleep(seconds) print(value) return value }
+        main { parallel { a=emit_line("FIRST",0.02) b=emit_line("LAST",0) } }
+    )");
+    ASSERT_EQ(output.str(),std::string("FIRST\nLAST\n"));
+}
+void test_parallel_host_cancellation() {
+    const std::string source="func slow() { sleep(10) return 1 } main { parallel { a=slow() b=slow() } }";
+    std::unique_ptr<AxonArena,decltype(&axon_arena_free)> arena(axon_arena_new(65536),&axon_arena_free);
+    Lexer lexer(source,"<parallel-cancel>"); Parser parser(lexer.tokenize(),arena.get());
+    AxonNode* program=parser.parse_program(); ASSERT_TRUE(!parser.has_errors());
+    Interpreter interpreter; interpreter.telemetry=false;
+    std::thread cancel([&] { std::this_thread::sleep_for(std::chrono::milliseconds(20)); interpreter.request_cancel(); });
+    std::string error;
+    try { interpreter.run(program); } catch (const std::exception& caught) { error=caught.what(); }
+    cancel.join();
+    ASSERT_TRUE(error.find("CancelledError:")!=std::string::npos);
+}
+void test_parallel_nested_failure() {
+    expect_execution_error(R"(
+        func fail() { raise "nested failure" }
+        func slow() { sleep(10) return 1 }
+        func inner() { parallel { x=fail() y=slow() } return x }
+        main { parallel { a=inner() b=slow() } }
+    )","nested failure");
+}
+
 int main() {
     std::cout << "═══════════════════════════════════════════\n";
     std::cout << "  Axon Interpreter Tests\n";
@@ -1270,6 +1474,28 @@ int main() {
     TEST(provider_missing_is_error);
     TEST(provider_budget_reaches_adapter);
     TEST(graph_unhandled_provider_error);
+    TEST(parallel_real_overlap_and_same_agent_outputs);
+    TEST(parallel_pipeline_last_declared_result);
+    TEST(parallel_variables_are_snapshots);
+    TEST(parallel_container_isolation);
+    TEST(parallel_returned_closures);
+    TEST(parallel_exported_existing_closure_state);
+    TEST(parallel_nested_blocks);
+    TEST(parallel_duplicate_targets_source_order);
+    TEST(parallel_empty_and_single);
+    TEST(parallel_only_top_level_results_are_published);
+    TEST(parallel_shared_memory);
+    TEST(parallel_error_cancels_sibling_and_preserves_bindings);
+    TEST(parallel_timeout_cancels_siblings);
+    TEST(parallel_provider_failure_is_not_hidden);
+    TEST(parallel_legacy_provider_serialized);
+    TEST(parallel_bounded_queue);
+    TEST(parallel_active_agent_frame);
+    TEST(parallel_rejects_control_statements_before_start);
+    TEST(parallel_print_source_order);
+    TEST(parallel_host_cancellation);
+    TEST(parallel_nested_failure);
+
 
 
     std::cout << "\n═══════════════════════════════════════════\n";

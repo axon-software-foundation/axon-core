@@ -84,13 +84,14 @@ APIs and their testing limits.
 
 - Functions, closures, positional calls, control flow, lists/dictionaries and relative file imports.
 - Full-agent calls, individual tasks, pipelines, cached task outputs and post-execution delays.
+- Concurrent parallel blocks and pipeline groups with snapshot isolation; see [parallel execution](docs/PARALLEL.md).
 - Ollama integration; native modules for files, JSON/CSV, hashes/codecs, dates, images and memory.
 - Document readers and OCR integrations with narrower validation; see the module reference.
 
 Execution budgets and host cancellation are documented in [execution control](docs/EXECUTION_CONTROL.md).
 
-**Pending:** public HTTP/REST and MCP modules, actual parallel
-language execution, additional LLM providers, complete multi-flow ownership and distributed mesh.
+**Pending:** public HTTP/REST and MCP modules, additional LLM providers, complete multi-flow ownership
+and distributed mesh.
 A parser declaration or C++ interface is not evidence of a working language feature.
 
 The CI baseline at public commit `7a1537f` passed Linux GCC Debug/Release, Windows UCRT64
@@ -108,7 +109,7 @@ cross-distribution ABI baseline. See [capability evidence](FEATURES.md) and [roa
 - [Issues](https://github.com/axon-software-foundation/axon-core/issues) for reproducible bugs and proposals
 
 English is the canonical documentation language. Reports in English or Spanish are welcome.
-See the [example inventory](examples/README.md) before running legacy samples.
+See the [example inventory](../examples/README.md) before running legacy samples.
 Legacy examples outside `examples/validation/` may require external files, Python or services;
 they are not all release acceptance examples. Historical RFCs are design records, not current API guarantees.
 

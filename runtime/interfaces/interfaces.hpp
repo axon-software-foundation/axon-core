@@ -277,6 +277,8 @@ public:
     virtual std::string   provider_name()               const = 0;
     virtual LLMResponse   complete(const LLMRequest& req)     = 0;
     virtual bool          is_available()                      = 0;
+    // Existing/custom adapters remain serialized unless they explicitly opt in.
+    virtual bool supports_concurrent_requests() const { return false; }
 };
 
 /* ─────────────────────────────────────────────────────────────

@@ -29,10 +29,10 @@ The baseline's external-service detection can print an informational Ollama-unav
 
 ## What the checks establish
 
-- Runtime suite: 31 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 103 cases covering expressions, functions, task input/output and delays, among others.
+- Runtime suite: 33 cases covering graph traversal, actor state, scheduler and runtime/session memory.
+- Interpreter suite: 124 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 28 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 30 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
@@ -58,6 +58,14 @@ The runtime suite includes intentional invalid actor transitions; their diagnost
 when the enclosing negative test passes.
 
 ## Recorded platform evidence
+
+The parallel change passed local strict Linux GCC 14.2 Release validation. Its added cases include
+21 interpreter concurrency/isolation cases, two generic scheduler cases and two CLI checks.
+The 124-case interpreter and 33-case runtime suites were also exercised with ThreadSanitizer;
+no races were reported in those cases. Local optional integration checks also exercised real Tesseract
+OCR and Python in parallel branches, including multiline context injection and print/result handling.
+This is focused evidence, not proof that arbitrary native calls or third-party adapters are thread-safe.
+Windows/macOS and the live Ollama parallel example remain manual/CI acceptance requirements.
 
 The execution-control patch was built locally on Linux GCC 14.2 Release with warnings as errors
 and fortified headers. Its 28 CTest entries passed, including 103 interpreter cases and nine transport

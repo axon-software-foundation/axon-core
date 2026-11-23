@@ -25,7 +25,8 @@ flow cannot renew its budget. An uncaught error produces CLI exit status 1.
 Embedders can call `Interpreter::request_cancel()` from another thread. Cancellation is cooperative:
 the interpreter checks statements, expressions and loop iterations, and interrupts sleep/delays.
 Call `reset_cancel()` while idle before reusing a cancelled interpreter. Other interpreter operations
-remain single-threaded; this change does not enable `parallel` or concurrent host calls to `run()`.
+remain single-threaded at the host API. Internal `parallel` workers use separate interpreter
+state and linked group cancellation; see [PARALLEL.md](PARALLEL.md).
 Cancellation produces `CancelledError` and unwinds the run; language catches cannot suppress it.
 No new language keyword, CLI cancellation command or Ctrl+C handler is introduced here.
 

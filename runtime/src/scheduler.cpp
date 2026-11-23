@@ -35,9 +35,11 @@ struct TaskPriority {
 class Scheduler final : public IScheduler {
 public:
     explicit Scheduler(
-        std::unordered_map<std::string, std::shared_ptr<IActor>> actors)
+        std::unordered_map<std::string, std::shared_ptr<IActor>> actors,
+        bool verbose = true)
         : _actors(std::move(actors))
         , _running(false)
+        , _verbose(verbose)
     {}
 
     ~Scheduler() { stop(); }
@@ -56,7 +58,7 @@ public:
             _pool.emplace_back([this]{ worker_loop(); });
         }
 
-        std::cout << "[Scheduler] started with " << n << " threads\n";
+        if (_verbose) std::cout << "[Scheduler] started with " << n << " threads\n";
     }
 
     void stop() override {
@@ -70,7 +72,20 @@ public:
         _cv.notify_all();
         for (auto& t : _pool) if (t.joinable()) t.join();
         _pool.clear();
-        std::cout << "[Scheduler] stopped\n";
+        if (_verbose) std::cout << "[Scheduler] stopped\n";
+    }
+
+    // Generic interpreter jobs use independent identities/futures, unlike actor IDs.
+    std::future<void> submit_work(std::function<void()> action) {
+        auto work = std::make_shared<std::packaged_task<void()>>(std::move(action));
+        auto result = work->get_future();
+        {
+            std::lock_guard<std::mutex> lock(_queue_mu);
+            if (!_running.load()) throw std::runtime_error("Scheduler is not running");
+            _work.push([work] { (*work)(); });
+        }
+        _cv.notify_one();
+        return result;
     }
 
     void submit(const ScheduledTask& task) override {
@@ -114,22 +129,33 @@ private:
     void worker_loop() {
         while (true) {
             ScheduledTask task;
+            std::function<void()> work;
 
             {
                 std::unique_lock<std::mutex> lk(_queue_mu);
                 _cv.wait(lk, [this]{
-                    return !_running.load() || !_queue.empty();
+                    return !_running.load() || !_queue.empty() || !_work.empty();
                 });
 
-                if (!_running.load() && _queue.empty()) return;
-                if (_queue.empty()) continue;
-
-                task = _queue.top();
-                _queue.pop();
+                if (!_running.load() && _queue.empty() && _work.empty()) return;
+                if (!_work.empty()) {
+                    work = std::move(_work.front());
+                    _work.pop();
+                } else {
+                    if (_queue.empty()) continue;
+                    task = _queue.top();
+                    _queue.pop();
+                }
             }
+            if (work) { work(); continue; }
 
             // Check cancellation
-            if (_cancelled.count(task.agent_id.value)) {
+            bool cancelled = false;
+            {
+                std::lock_guard<std::mutex> lock(_queue_mu);
+                cancelled = _cancelled.count(task.agent_id.value) != 0;
+            }
+            if (cancelled) {
                 resolve(task.agent_id, AxonValue::null());
                 continue;
             }
@@ -189,7 +215,9 @@ private:
     /* ── State ───────────────────────────────────────────── */
     std::unordered_map<std::string, std::shared_ptr<IActor>> _actors;
     std::atomic<bool>    _running;
+    bool _verbose;
     std::vector<std::thread> _pool;
+    std::queue<std::function<void()>> _work;
 
     mutable std::mutex   _queue_mu;
     std::condition_variable _cv;

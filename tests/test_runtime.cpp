@@ -294,6 +294,32 @@ void test_scheduler_stop_waiting_workers() {
 /* ─────────────────────────────────────────────────────────────
  * AxonValue Tests
  * ───────────────────────────────────────────────────────────── */
+void test_scheduler_generic_work_results() {
+    Scheduler scheduler({}, false);
+    scheduler.start(2);
+    std::atomic<int> completed{0};
+    auto first = scheduler.submit_work([&] { ++completed; });
+    auto failure = scheduler.submit_work([] { throw std::runtime_error("job failure"); });
+    first.get();
+    bool caught = false;
+    try { failure.get(); } catch (const std::runtime_error&) { caught = true; }
+    scheduler.submit_work([&] { ++completed; }).get();
+    scheduler.stop();
+    ASSERT(caught);
+    ASSERT(completed.load() == 2);
+}
+
+void test_scheduler_stop_drains_generic_queue() {
+    Scheduler scheduler({}, false);
+    scheduler.start(2);
+    std::atomic<int> completed{0};
+    std::vector<std::future<void>> results;
+    for (int i=0; i<40; ++i) results.push_back(scheduler.submit_work([&] { ++completed; }));
+    scheduler.stop();
+    for (auto& result : results) result.get();
+    ASSERT(completed.load() == 40);
+}
+
 void test_value_null() {
     auto v = AxonValue::null();
     ASSERT(v.is_null());
@@ -370,6 +396,8 @@ int main() {
     TEST(scheduler_run_agent);
     TEST(scheduler_queue_depth);
     TEST(scheduler_stop_waiting_workers);
+    TEST(scheduler_generic_work_results);
+    TEST(scheduler_stop_drains_generic_queue);
 
     // Values
     TEST(value_null);

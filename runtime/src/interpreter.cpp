@@ -46,6 +46,30 @@ private:
     std::function<void()> _action;
 };
 
+class TemporaryDirectory {
+public:
+    std::filesystem::path path;
+    TemporaryDirectory() {
+        static std::atomic<size_t> sequence{0};
+        const auto base = std::filesystem::temp_directory_path();
+        for (size_t i = 0; i < 64; ++i) {
+            auto candidate = base / ("axon-" + std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()) + "-"
+                + std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)));
+            std::error_code error;
+            if (std::filesystem::create_directory(candidate, error)) { path = candidate; return; }
+            if (error) throw std::runtime_error("cannot create Axon temporary directory: " + error.message());
+        }
+        throw std::runtime_error("cannot allocate Axon temporary directory");
+    }
+    ~TemporaryDirectory() {
+        std::error_code ignored;
+        std::filesystem::remove_all(path, ignored);
+    }
+    TemporaryDirectory(const TemporaryDirectory&) = delete;
+    TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
+};
+
 void validate_delay(double seconds, const std::string& owner) {
     if (!std::isfinite(seconds) || seconds < 0)
         throw std::runtime_error(owner + ": delay must be finite and non-negative");
@@ -134,22 +158,23 @@ void Interpreter::log(AxonLogLevel level, const std::string& msg) {
     }
 
     if (_out_cfg.to_stdout || (!_out_cfg.to_stdout && !_out_cfg.to_file))
-        std::cout << line << "\n";
+        (*_stdout) << line << "\n";
 
     if (_out_cfg.to_file && _out_cfg.file_path) {
+        auto file_guard = native_lock();
         std::ofstream f(_out_cfg.file_path, std::ios::app);
         if (f) f << line << "\n";
     }
 }
 
 void Interpreter::print_metrics() {
-    std::cout << "\n\033[1m── Metrics ─────────────────────────────────────\033[0m\n";
+    (*_stdout) << "\n\033[1m── Metrics ─────────────────────────────────────\033[0m\n";
     for (auto& [name, def] : _agents) {
         auto retries = _retry_counts.count(name) ? _retry_counts[name] : 0;
-        std::cout << "  " << name
+        (*_stdout) << "  " << name
                   << "  retries=" << retries << "\n";
     }
-    std::cout << "────────────────────────────────────────────────\n";
+    (*_stdout) << "────────────────────────────────────────────────\n";
 }
 
 // ── GAP 4: Condition evaluation ───────────────────────────────
@@ -299,12 +324,205 @@ Interpreter::~Interpreter() {
 
 void Interpreter::register_provider(
     std::shared_ptr<IProviderAdapter> adapter) {
+    _provider_locks[adapter->provider_name()] = std::make_shared<std::timed_mutex>();
     _providers[adapter->provider_name()] = std::move(adapter);
 }
 
 // ─────────────────────────────────────────────────────────────
 // run — entry point
 // ─────────────────────────────────────────────────────────────
+std::unique_lock<std::recursive_timed_mutex> Interpreter::native_lock() {
+    std::unique_lock<std::recursive_timed_mutex> lock(_shared->native_mutex, std::defer_lock);
+    while (!lock.try_lock_for(std::chrono::milliseconds(10))) _execution->check();
+    _execution->check();
+    return lock;
+}
+
+std::unique_ptr<Interpreter> Interpreter::fork_branch(EnvPtr env, EnvPtr& branch_env) {
+    auto branch = std::make_unique<Interpreter>();
+    branch->_shared = _shared;
+    branch->_providers = _providers;
+    branch->_provider_locks = _provider_locks;
+    branch->_agents = _agents;
+    branch->_graph = std::make_unique<GraphEngine>(*_graph);
+    branch->_out_cfg = _out_cfg;
+    branch->_storages = _storages;
+    branch->_retry_counts = _retry_counts;
+    branch->_source_file = _source_file;
+    branch->_source_lines = _source_lines;
+    branch->_debug_mode = _debug_mode;
+    branch->_flow_delay = _flow_delay;
+    branch->_flow_timeout = _flow_timeout;
+    branch->_flows = _flows;
+    branch->_graph_node = _graph_node;
+    branch->_global_main_node = _global_main_node;
+    branch->_expected_output = _expected_output;
+    branch->_sessions = _sessions;
+    branch->_cancelled = _cancelled;
+    branch->_execution = _execution;
+    branch->_closure_id_counter = _closure_id_counter;
+    branch->telemetry = telemetry;
+    // AST/definition pointers are borrowed until every worker has joined. Imported
+    // arenas remain owned by the calling interpreter; never free them in a fork.
+    std::unordered_map<size_t, size_t> ids;
+    for (const auto& closure : _closure_envs)
+        ids[closure.first] = _closure_id_counter->fetch_add(1, std::memory_order_relaxed);
+    std::function<Value(const Value&)> copy_value = [&](const Value& value) {
+        Value copied = value;
+        for (auto& item : copied.list) item = copy_value(item);
+        for (auto& item : copied.dict) item.second = copy_value(item.second);
+        auto marker = copied.dict.find("__func__");
+        auto cid = copied.dict.find("__closure_id__");
+        if (marker != copied.dict.end() && marker->second.s == "func" && cid != copied.dict.end()) {
+            auto found = ids.find(static_cast<size_t>(cid->second.n));
+            if (found != ids.end()) cid->second = Value::from(static_cast<double>(found->second));
+        }
+        return copied;
+    };
+    std::unordered_map<const Env*, EnvPtr> environments;
+    std::function<EnvPtr(EnvPtr)> copy_env = [&](EnvPtr source) -> EnvPtr {
+        if (!source) return nullptr;
+        auto found = environments.find(source.get());
+        if (found != environments.end()) return found->second;
+        auto copied = make_env();
+        environments[source.get()] = copied;
+        copied->_parent = copy_env(source->_parent);
+        for (const auto& item : source->_vars) copied->set(item.first, copy_value(item.second));
+        return copied;
+    };
+    branch->_global_env = copy_env(_global_env);
+    branch_env = copy_env(env);
+    for (const auto& closure : _closure_envs)
+        branch->_closure_envs[ids.at(closure.first)] = copy_env(closure.second);
+    for (const auto& output : _task_outputs)
+        branch->_task_outputs[output.first] = copy_value(output.second);
+    for (const auto* frame : _task_frames) {
+        auto copied = std::make_unique<TaskFrame>();
+        copied->agent = &branch->_agents.at(frame->agent->name);
+        for (const auto& output : frame->outputs)
+            copied->outputs[output.first] = copy_value(output.second);
+        branch->_task_frames.push_back(copied.get());
+        branch->_owned_task_frames.push_back(std::move(copied));
+    }
+    if (_current_agent) branch->_current_agent = &branch->_agents.at(_current_agent->name);
+    return branch;
+}
+
+void Interpreter::import_branch_closures(const Interpreter& branch, const Value& value) {
+    std::set<size_t> closures;
+    std::set<const Env*> environments;
+    std::function<void(const Value&)> visit_value;
+    std::function<void(EnvPtr)> visit_env = [&](EnvPtr env) {
+        if (!env || !environments.insert(env.get()).second) return;
+        visit_env(env->_parent);
+        for (const auto& item : env->_vars) visit_value(item.second);
+    };
+    visit_value = [&](const Value& item) {
+        for (const auto& child : item.list) visit_value(child);
+        for (const auto& child : item.dict) visit_value(child.second);
+        auto marker = item.dict.find("__func__");
+        auto cid = item.dict.find("__closure_id__");
+        if (marker == item.dict.end() || marker->second.s != "func" || cid == item.dict.end()) return;
+        const auto id = static_cast<size_t>(cid->second.n);
+        if (!closures.insert(id).second) return;
+        auto found = branch._closure_envs.find(id);
+        if (found != branch._closure_envs.end()) {
+            _closure_envs[id] = found->second;
+            visit_env(found->second);
+        }
+    };
+    visit_value(value);
+}
+
+Value Interpreter::exec_parallel(const std::vector<AxonNode*>& branches, EnvPtr env,
+                                  bool pipeline_group, Value input) {
+    if (branches.empty()) return pipeline_group ? input : Value::null();
+    if (!pipeline_group) {
+        for (const auto* branch : branches)
+            if (!branch || (branch->type != AXON_NODE_ASSIGNMENT && branch->type != AXON_NODE_EXPR_STMT))
+                throw RaiseSignal{"ParallelError: each branch must be an assignment or expression"};
+    }
+    struct Branch {
+        std::unique_ptr<Interpreter> interpreter;
+        EnvPtr env;
+        Value result;
+        std::exception_ptr error;
+        std::ostringstream output, diagnostic;
+    };
+    auto cancelled = std::make_shared<std::atomic<bool>>(false);
+    std::atomic<size_t> first_error{branches.size()};
+    std::vector<std::unique_ptr<Branch>> states;
+    for (size_t i = 0; i < branches.size(); ++i) {
+        auto state = std::make_unique<Branch>();
+        state->interpreter = fork_branch(env, state->env);
+        state->interpreter->_execution = std::make_shared<ExecutionControl>(_execution->linked_cancel(cancelled));
+        state->interpreter->_stdout = &state->output;
+        state->interpreter->_stderr = &state->diagnostic;
+        states.push_back(std::move(state));
+    }
+    // Each block has its own bounded pool. Nested blocks cannot deadlock waiting
+    // for jobs in an exhausted parent pool; all pools join before state is merged.
+    Scheduler scheduler({}, false);
+    const size_t capacity = std::min<size_t>(8, std::max(2u, std::thread::hardware_concurrency()));
+    scheduler.start(std::min(branches.size(), capacity));
+    std::vector<std::future<void>> results;
+    for (size_t i = 0; i < branches.size(); ++i) {
+        results.push_back(scheduler.submit_work([&, i] {
+            auto& state = *states[i];
+            auto& worker = *state.interpreter;
+            try {
+                worker._execution->check();
+                if (pipeline_group) {
+                    state.env->set("__input__", input);
+                    state.env->set("__pipeline_input__", input);
+                    if (branches[i]->type == AXON_NODE_IDENTIFIER) {
+                        auto agent = worker._agents.find(branches[i]->as.identifier.name);
+                        if (agent != worker._agents.end()) {
+                            state.result = worker.exec_agent(agent->second, input, state.env);
+                            return;
+                        }
+                    }
+                    if (branches[i]->type == AXON_NODE_TASK_CALL && branches[i]->as.task_call.args.count == 0)
+                        state.env->set("flow.input", input);
+                    state.result = worker.eval(branches[i], state.env);
+                } else state.result = worker.exec_stmt(branches[i], state.env);
+                worker._execution->check();
+            } catch (...) {
+                state.error = std::current_exception();
+                size_t expected = branches.size();
+                first_error.compare_exchange_strong(expected, i);
+                cancelled->store(true, std::memory_order_relaxed);
+            }
+        }));
+    }
+    for (auto& result : results) result.get();
+    scheduler.stop();
+    for (auto& state : states) {
+        (*_stdout) << state->output.str();
+        (*_stderr) << state->diagnostic.str();
+    }
+    _execution->check();
+    const size_t error = first_error.load();
+    if (error < branches.size()) std::rethrow_exception(states[error]->error);
+    // Commit only after all branches succeed. Bindings/task-cache collisions use
+    // source order, retaining the previous last-declared-result convention.
+    for (size_t i = 0; i < branches.size(); ++i) {
+        auto& state = *states[i];
+        import_branch_closures(*state.interpreter, state.result);
+        if (!pipeline_group && branches[i]->type == AXON_NODE_ASSIGNMENT)
+            env->assign(branches[i]->as.assignment.name, state.result);
+        for (const auto& item : state.interpreter->_parallel_task_updates) {
+            const auto separator = item.first.find('.');
+            auto agent = _agents.find(item.first.substr(0, separator));
+            if (agent != _agents.end() && separator != std::string::npos) {
+                import_branch_closures(*state.interpreter, item.second);
+                store_task_output(agent->second, item.first.substr(separator + 1), item.second);
+            }
+        }
+    }
+    return states.back()->result;
+}
+
 Value Interpreter::with_timeout(double seconds, const std::string& owner,
                                   const std::function<Value()>& action) {
     auto parent = _execution;
@@ -519,13 +737,13 @@ void Interpreter::collect(AxonNode* prog, EnvPtr env) {
                 else if (key == "key")      cfg.api_key  = val;
                 else if (key == "dim")      cfg.dim      = std::stoi(val);
             }
-            _sem_mem = std::make_unique<SemanticMemory>(cfg);
+            _shared->semantic = std::make_unique<SemanticMemory>(cfg);
             log(AXON_LOG_INFO, "embedding: " + std::string(s->as.embedding_def.name)
                 + " [" + cfg.provider + "/" + cfg.model + "]");
 
         } else if (s->type == AXON_NODE_FUNC_DEF) {
             if (s->as.func_def.name) {
-                size_t cid3 = _closure_id_counter++;
+                size_t cid3 = _closure_id_counter->fetch_add(1, std::memory_order_relaxed);
                 _closure_envs[cid3] = env;
                 Value fn; fn.kind = Value::Kind::Dict;
                 fn.dict["__func__"]       = Value::from(std::string("func"));
@@ -808,6 +1026,7 @@ Value Interpreter::require_task_output(const std::string& agent,
 void Interpreter::store_task_output(const AgentDef& def, const std::string& task,
                                      const Value& value) {
     _task_outputs[std::string(def.name) + "." + task] = value;
+    _parallel_task_updates[std::string(def.name) + "." + task] = value;
     for (auto frame = _task_frames.rbegin(); frame != _task_frames.rend(); ++frame) {
         if ((*frame)->agent == &def) {
             (*frame)->outputs[task] = value;
@@ -1014,7 +1233,7 @@ Value Interpreter::exec_stmt(AxonNode* node, EnvPtr env) {
         case AXON_NODE_FUNC_DEF:
         case AXON_NODE_ANON_FUNC: {
             // Create function value with captured env (closure)
-            size_t cid = _closure_id_counter++;
+            size_t cid = _closure_id_counter->fetch_add(1, std::memory_order_relaxed);
             _closure_envs[cid] = env;   // capture current scope
             Value fn; fn.kind = Value::Kind::Dict;
             fn.dict["__func__"]     = Value::from(std::string("func"));
@@ -1052,14 +1271,10 @@ Value Interpreter::exec_stmt(AxonNode* node, EnvPtr env) {
         }
 
         case AXON_NODE_PARALLEL_BLOCK: {
-            // Run all assignments in parallel using thread pool
-            // Phase 2B: sequential with markers; true parallel in Phase 3
-            log(AXON_LOG_INFO, "parallel block (sequential mode in Phase 2B)");
-            Value last = Value::null();
-            for (size_t i = 0; i < node->as.parallel_block.assignments.count; ++i) {
-                last = exec_stmt(node->as.parallel_block.assignments.items[i], env);
-            }
-            return last;
+            std::vector<AxonNode*> branches;
+            for (size_t i = 0; i < node->as.parallel_block.assignments.count; ++i)
+                branches.push_back(node->as.parallel_block.assignments.items[i]);
+            return exec_parallel(branches, env);
         }
 
         case AXON_NODE_SPAWN_STMT: {
@@ -1168,21 +1383,15 @@ Value Interpreter::exec_try(AxonNode* node, EnvPtr env) {
 }
 
 Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
+    auto native_guard = native_lock();
     std::string code = node->as.interop_block.code
                        ? node->as.interop_block.code : "";
 
     if (node->as.interop_block.lang == AXON_INTEROP_PYTHON) {
         // Write temp Python file, inject Axon variables, run subprocess,
         // capture __result__ via a sentinel prefix in stdout.
-        std::string tmp_path;
-#ifdef AXON_OS_WINDOWS
-        {
-            const char* td = getenv("TEMP");
-            tmp_path = std::string(td ? td : "C:\\Temp") + "\\axon_py.py";
-        }
-#else
-        tmp_path = "/tmp/axon_py_" + std::to_string((long long)this) + ".py";
-#endif
+        TemporaryDirectory temporary;
+        std::string tmp_path = (temporary.path / "script.py").string();
         // Strip common leading whitespace from code (dedent)
         std::string dedented;
         {
@@ -1216,16 +1425,11 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
             std::string safe = k;
             for (char& c : safe) if (c == '.') c = '_';
             const Value& v = kv.second;
+            if (k == "print" && v.kind == Value::Kind::String && v.s == "__builtin_print__") continue;
             if (v.kind == Value::Kind::String) {
-                // Escape inner quotes
-                std::string escaped = v.s;
-                std::string es2;
-                for (char c : escaped) {
-                    if (c == '"') es2 += "\\\"";
-                    else if (c == '\\') es2 += "\\\\";
-                    else es2 += c;
-                }
-                script += safe + " = \"" + es2 + "\"\n";
+                // JSON string literals are valid Python string literals too;
+                // preserve newlines/control characters from document/OCR context.
+                script += safe + " = " + json_stringify(v, 0) + "\n";
             } else if (v.kind == Value::Kind::Number) {
                 script += safe + " = " + to_string(v) + "\n";
             } else if (v.kind == Value::Kind::Bool) {
@@ -1234,7 +1438,7 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
         }
 
         script += "\n";
-        script += code;
+        script += dedented;
         script += "\n";
         // Capture __result__ with a sentinel line
         script += "import sys as _sys, json as _json\n";
@@ -1307,7 +1511,7 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
                     py_obj.dict["__result__"] = py_result;
                     env->set("python", py_obj);
                 } else if (!line.empty()) {
-                    std::cout << line << "\n";
+                    (*_stdout) << line << "\n";
                 }
             }
         }
@@ -1332,7 +1536,7 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
             rc = pclose(p);
 #endif
         }
-        if (!sh_out.empty()) std::cout << sh_out;
+        if (!sh_out.empty()) (*_stdout) << sh_out;
         Value stdout_val = Value::from(sh_out);
         Value rc_val     = Value::from((double)rc);
         env->set("shell.stdout",   stdout_val);
@@ -1420,6 +1624,11 @@ Value Interpreter::call_llm(const AgentDef&                   def,
     try {
         req.control = _execution;
         _global_env->set("__last_llm_error__", Value::null());
+        std::unique_lock<std::timed_mutex> provider_guard(*_provider_locks.at(def.provider), std::defer_lock);
+        if (!it->second->supports_concurrent_requests()) {
+            while (!provider_guard.try_lock_for(std::chrono::milliseconds(10))) _execution->check();
+        }
+        _execution->check();
         LLMResponse resp = it->second->complete(req);
         _execution->check();
 
@@ -1609,7 +1818,7 @@ Value Interpreter::eval(AxonNode* node, EnvPtr env) {
         case AXON_NODE_PIPELINE:   return eval_pipeline(node, env);
         case AXON_NODE_FUNC_DEF:
         case AXON_NODE_ANON_FUNC: {
-            size_t cid2 = _closure_id_counter++;
+            size_t cid2 = _closure_id_counter->fetch_add(1, std::memory_order_relaxed);
             _closure_envs[cid2] = env;
             Value fn; fn.kind = Value::Kind::Dict;
             fn.dict["__func__"]       = Value::from(std::string("func"));
@@ -2055,15 +2264,15 @@ Value Interpreter::eval_call(AxonNode* node, EnvPtr env) {
     }
         if (callee.kind == Value::Kind::String && callee.s == "__builtin_print__") {
         for (size_t i = 0; i < node->as.func_call.args.count; ++i) {
-            if (i) std::cout << "";
+            if (i) (*_stdout) << "";
             Value pv = eval(node->as.func_call.args.items[i], env);
             // Use JSON stringify for Dict/List so output is readable
             if (pv.kind == Value::Kind::Dict || pv.kind == Value::Kind::List)
-                std::cout << json_stringify(pv, 0);
+                (*_stdout) << json_stringify(pv, 0);
             else
-                std::cout << to_string(pv);
+                (*_stdout) << to_string(pv);
         }
-        std::cout << "\n";
+        (*_stdout) << "\n";
         return Value::null();
     }
 
@@ -2208,15 +2417,15 @@ void Interpreter::set_source(const std::string& path, const std::string& src) {
 }
 
 void Interpreter::runtime_error(const std::string& msg, int line) {
-    std::cerr << "\n\033[31m[runtime error]\033[0m " << msg << "\n";
+    (*_stderr) << "\n\033[31m[runtime error]\033[0m " << msg << "\n";
     if (line > 0 && !_source_file.empty()) {
-        std::cerr << "  --> " << _source_file << ":" << line << "\n";
+        (*_stderr) << "  --> " << _source_file << ":" << line << "\n";
         if (line <= (int)_source_lines.size()) {
             std::string& src_line = _source_lines[line - 1];
-            std::cerr << "   " << line << " | " << src_line << "\n";
+            (*_stderr) << "   " << line << " | " << src_line << "\n";
         }
     }
-    std::cerr << "\n";
+    (*_stderr) << "\n";
     throw std::runtime_error(msg);
 }
 
@@ -2385,29 +2594,11 @@ Value Interpreter::eval_task_call(AxonNode* node, EnvPtr env) {
 Value Interpreter::eval_pipeline(AxonNode* node, EnvPtr env) {
     Value current_val = eval(node->as.pipeline.input, env);
 
-    if (node->as.pipeline.parallel && node->as.pipeline.stages.count > 1) {
-        // Parallel group: run all stages with same input
-        // Phase 2D: sequential execution (true parallel in Phase 5)
-        log(AXON_LOG_INFO, "pipeline parallel group ("
-            + std::to_string(node->as.pipeline.stages.count) + " stages)");
-        Value last = Value::null();
-        for (size_t i = 0; i < node->as.pipeline.stages.count; ++i) {
-            AxonNode* stage = node->as.pipeline.stages.items[i];
-            EnvPtr stage_env = child_env(env);
-            stage_env->set("__input__", current_val);
-            stage_env->set("__pipeline_input__", current_val);
-            if (stage->type == AXON_NODE_IDENTIFIER) {
-                std::string aname = stage->as.identifier.name;
-                auto ait = _agents.find(aname);
-                if (ait != _agents.end()) {
-                    try { last = exec_agent(ait->second, current_val, stage_env); }
-                    catch (const ReturnSignal& r) { last = r.value; }
-                    continue;
-                }
-            }
-            last = eval(stage, stage_env);
-        }
-        return last;
+    if (node->as.pipeline.parallel) {
+        std::vector<AxonNode*> branches;
+        for (size_t i = 0; i < node->as.pipeline.stages.count; ++i)
+            branches.push_back(node->as.pipeline.stages.items[i]);
+        return exec_parallel(branches, env, true, current_val);
     } else if (node->as.pipeline.stages.count == 1) {
         AxonNode* stage = node->as.pipeline.stages.items[0];
         EnvPtr stage_env = child_env(env);
@@ -2438,6 +2629,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                                       const std::string&         fn,
                                       const std::vector<Value>&  args,
                                       EnvPtr                     env) {
+    auto native_guard = native_lock();
     if (mod == "http") {
         throw std::runtime_error("http->" + fn +
             "(): HTTP module is not implemented in this Core snapshot");
@@ -2688,7 +2880,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
         if (args.size() >= 4) ttl = (uint32_t)args[3].n;
-        _mem_store.store(key, value, scope, ttl);
+        _shared->memory.store(key, value, scope, ttl);
         log(AXON_LOG_DEBUG, "memory->store: " + key + " [" + to_string(args.size()>=3?args[2]:Value::from(std::string("runtime"))) + "]");
         return Value::from(true);
     }
@@ -2704,7 +2896,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "shared")     scope = MemScope::Shared;
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
-        std::string val = _mem_store.get(key, scope);
+        std::string val = _shared->memory.get(key, scope);
         return val.empty() ? Value::null() : Value::from(val);
     }
 
@@ -2719,7 +2911,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "shared")     scope = MemScope::Shared;
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
-        return Value::from(_mem_store.has(key, scope));
+        return Value::from(_shared->memory.has(key, scope));
     }
 
     // ── memory->remove(key, scope="runtime") ─────────────────
@@ -2732,7 +2924,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "shared")     scope = MemScope::Shared;
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
-        _mem_store.remove(to_string(args[0]), scope);
+        _shared->memory.remove(to_string(args[0]), scope);
         return Value::from(true);
     }
 
@@ -2744,9 +2936,9 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             if      (sc == "session")    scope = MemScope::Session;
             else if (sc == "shared")     scope = MemScope::Shared;
             else if (sc == "persistent") scope = MemScope::Persistent;
-            else if (sc == "all") { _mem_store.clear_all(); return Value::from(true); }
+            else if (sc == "all") { _shared->memory.clear_all(); return Value::from(true); }
         }
-        _mem_store.clear(scope);
+        _shared->memory.clear(scope);
         return Value::from(true);
     }
 
@@ -2760,7 +2952,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
         Value r; r.kind = Value::Kind::List;
-        for (auto& k : _mem_store.keys(scope))
+        for (auto& k : _shared->memory.keys(scope))
             r.list.push_back(Value::from(k));
         return r;
     }
@@ -2769,7 +2961,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
     if (mod == "memory" && fn == "persist") {
         if (args.empty()) return Value::from(false);
         std::string path = to_string(args[0]);
-        bool ok = _mem_store.persist(path);
+        bool ok = _shared->memory.persist(path);
         log(AXON_LOG_INFO, "memory->persist: " + path
             + (ok ? " OK" : " FAILED"));
         return Value::from(ok);
@@ -2779,10 +2971,10 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
     if (mod == "memory" && fn == "load") {
         if (args.empty()) return Value::from(false);
         std::string path = to_string(args[0]);
-        bool ok = _mem_store.load(path);
+        bool ok = _shared->memory.load(path);
         log(AXON_LOG_INFO, "memory->load: " + path
             + (ok ? " OK (" + std::to_string(
-                _mem_store.size(MemScope::Persistent)) + " entries)"
+                _shared->memory.size(MemScope::Persistent)) + " entries)"
                   : " FAILED"));
         return Value::from(ok);
     }
@@ -2796,14 +2988,14 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             else if (sc == "shared")     scope = MemScope::Shared;
             else if (sc == "persistent") scope = MemScope::Persistent;
         }
-        return Value::from((double)_mem_store.size(scope));
+        return Value::from((double)_shared->memory.size(scope));
     }
 
     // ── memory->embed(text) ─────────────────────────────────
     if (mod == "memory" && fn == "embed") {
         if (args.empty()) return Value::null();
-        if (!_sem_mem) _sem_mem = std::make_unique<SemanticMemory>();
-        auto vec = _sem_mem->embed(to_string(args[0]));
+        if (!_shared->semantic) _shared->semantic = std::make_unique<SemanticMemory>();
+        auto vec = _shared->semantic->embed(to_string(args[0]));
         if (vec.empty()) { log(AXON_LOG_WARN,"memory->embed: no vector (Ollama running?)"); return Value::null(); }
         Value r; r.kind = Value::Kind::List;
         for (float f : vec) r.list.push_back(Value::from((double)f));
@@ -2813,11 +3005,11 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
     // ── memory->index(text, metadata) ────────────────────────
     if (mod == "memory" && fn == "index") {
         if (args.empty()) return Value::from(false);
-        if (!_sem_mem) _sem_mem = std::make_unique<SemanticMemory>();
+        if (!_shared->semantic) _shared->semantic = std::make_unique<SemanticMemory>();
         std::string text = to_string(args[0]);
         std::string meta = args.size() >= 2 ? to_string(args[1]) : "";
-        bool ok = _sem_mem->index(text, meta);
-        if (ok) log(AXON_LOG_INFO,"memory->index: added ("+std::to_string(_sem_mem->size())+" docs)");
+        bool ok = _shared->semantic->index(text, meta);
+        if (ok) log(AXON_LOG_INFO,"memory->index: added ("+std::to_string(_shared->semantic->size())+" docs)");
         else    log(AXON_LOG_WARN,"memory->index: failed — is Ollama running?");
         return Value::from(ok);
     }
@@ -2825,10 +3017,10 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
     // ── memory->search(query, top_k=5) ───────────────────────
     if (mod == "memory" && fn == "search") {
         if (args.empty()) { Value r; r.kind=Value::Kind::List; return r; }
-        if (!_sem_mem)    { Value r; r.kind=Value::Kind::List; return r; }
+        if (!_shared->semantic)    { Value r; r.kind=Value::Kind::List; return r; }
         std::string query = to_string(args[0]);
         int top_k = args.size() >= 2 ? (int)args[1].n : 5;
-        auto results = _sem_mem->search(query, top_k);
+        auto results = _shared->semantic->search(query, top_k);
         Value out; out.kind = Value::Kind::List;
         for (auto& r : results) {
             Value entry; entry.kind = Value::Kind::Dict;
@@ -2843,13 +3035,13 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
 
     // ── memory->sem_size() ────────────────────────────────────
     if (mod == "memory" && fn == "sem_size") {
-        return Value::from(_sem_mem ? (double)_sem_mem->size() : 0.0);
+        return Value::from(_shared->semantic ? (double)_shared->semantic->size() : 0.0);
     }
 
     // ── memory->sem_persist(path) ─────────────────────────────
     if (mod == "memory" && fn == "sem_persist") {
-        if (args.empty() || !_sem_mem) return Value::from(false);
-        bool ok = _sem_mem->persist(to_string(args[0]));
+        if (args.empty() || !_shared->semantic) return Value::from(false);
+        bool ok = _shared->semantic->persist(to_string(args[0]));
         log(AXON_LOG_INFO,std::string("memory->sem_persist: ")+(ok?"OK":"FAILED"));
         return Value::from(ok);
     }
@@ -2857,11 +3049,11 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
     // ── memory->sem_load(path) ────────────────────────────────
     if (mod == "memory" && fn == "sem_load") {
         if (args.empty()) return Value::from(false);
-        if (!_sem_mem) _sem_mem = std::make_unique<SemanticMemory>();
-        bool ok = _sem_mem->load(to_string(args[0]));
+        if (!_shared->semantic) _shared->semantic = std::make_unique<SemanticMemory>();
+        bool ok = _shared->semantic->load(to_string(args[0]));
         if (ok) {
             log(AXON_LOG_INFO, "memory->sem_load: OK ("
-                + std::to_string(_sem_mem->size()) + " docs)");
+                + std::to_string(_shared->semantic->size()) + " docs)");
         } else {
             log(AXON_LOG_WARN,
                 "memory->sem_load: FAILED — delete old .idx and re-index");
@@ -3081,11 +3273,8 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                 return Value::from(msg);
             }
 
-            // Resolve the working directory without a fixed-size path buffer.
-            std::error_code path_error;
-            const auto cwd = std::filesystem::current_path(path_error);
-            if (path_error) return Value::from(std::string("[ocr] cannot resolve working directory"));
-            const std::string out_base = (cwd / "axon_ocr_tmp").string();
+            TemporaryDirectory temporary;
+            const std::string out_base = (temporary.path / "ocr").string();
             const std::string out_file = out_base + ".txt";
             auto cleanup = [&](const std::string& path) {
                 std::error_code cleanup_error;
