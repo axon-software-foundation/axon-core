@@ -1,0 +1,33 @@
+# Requires a running Ollama service and an installed llama3.2 model.
+flow Demo { debug=false timeout=180 }
+agent Working {
+    provider ollama
+    model llama3.2
+    timeout=80
+    task Generate { input=__input__ prompt=["Answer briefly."] }
+}
+agent MissingModel {
+    provider ollama
+    model "axon-validation-deliberately-missing-model"
+    timeout=10
+    task Generate { prompt=["This model must not exist."] }
+}
+main {
+    first=Working("Name one fruit.")
+    if typeof(first) != "string" { raise "first generation failed" }
+    if first.isempty() { raise "first generation was empty" }
+    caught=false
+    try { MissingModel("test") } catch err {
+        if err.find("ProviderError:") != 0 { raise "unexpected failure type" }
+        if err.find("HTTP 404") < 0 { raise "expected the missing-model HTTP response" }
+        caught=true
+        print("Expected provider failure: ",err)
+    }
+    if caught == false { raise "missing-model failure was swallowed" }
+    recovered=Working("Name a different fruit.")
+    if typeof(recovered) != "string" { raise "recovery generation failed" }
+    if recovered.isempty() { raise "recovery generation was empty" }
+    print("First: ",first)
+    print("Recovered: ",recovered)
+    print("PASS live Ollama error and recovery")
+}

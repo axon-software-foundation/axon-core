@@ -50,8 +50,8 @@ Use a new build directory when changing compilers or generators; set `AXON_BUILD
 ## Agent and task example
 
 This example needs a running Ollama service and the `llama3.2` model (`ollama pull llama3.2`).
-CI checks its syntax; it does not call the model. A missing provider can fall back to input
-passthrough, so a successful exit alone is not proof of LLM generation.
+CI checks its syntax; it does not call the model. Missing providers and failed model requests
+raise `ProviderError`; they do not substitute the input for generated output.
 
 <!-- axon-check: check -->
 ```axon
@@ -87,7 +87,9 @@ APIs and their testing limits.
 - Ollama integration; native modules for files, JSON/CSV, hashes/codecs, dates, images and memory.
 - Document readers and OCR integrations with narrower validation; see the module reference.
 
-**Pending:** public HTTP/REST and MCP modules, effective timeouts/cancellation, actual parallel
+Execution budgets and host cancellation are documented in [execution control](docs/EXECUTION_CONTROL.md).
+
+**Pending:** public HTTP/REST and MCP modules, actual parallel
 language execution, additional LLM providers, complete multi-flow ownership and distributed mesh.
 A parser declaration or C++ interface is not evidence of a working language feature.
 

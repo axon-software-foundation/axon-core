@@ -190,7 +190,7 @@ static int cmd_run(const std::string& path) {
     } else {
         if (!quiet_mode)
             std::cout << C_YELLOW << "[axon]" << C_RESET
-                      << " Ollama not detected — LLM calls will be skipped.\n"
+                      << " Ollama not detected — model calls will raise ProviderError.\n"
                       << "       Start Ollama with: " << C_BOLD
                       << "ollama serve" << C_RESET << "\n\n";
     }

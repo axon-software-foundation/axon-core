@@ -6,12 +6,6 @@
 #include <thread>
 #include <filesystem>
 
-// ── sleep helper ─────────────────────────────────────────────
-static void axon_sleep(double seconds) {
-    if (seconds <= 0) return;
-    auto ms = (long long)(seconds * 1000.0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-}
 #if defined(_WIN32) || defined(_WIN64)
 #include <direct.h>
 #include <windows.h>
@@ -311,11 +305,32 @@ void Interpreter::register_provider(
 // ─────────────────────────────────────────────────────────────
 // run — entry point
 // ─────────────────────────────────────────────────────────────
+Value Interpreter::with_timeout(double seconds, const std::string& owner,
+                                  const std::function<Value()>& action) {
+    auto parent = _execution;
+    _execution = std::make_shared<ExecutionControl>(parent->child(seconds, owner));
+    ScopeExit restore([&] { _execution = parent; });
+    try {
+        _execution->check();
+        Value result = action();
+        _execution->check();
+        return result;
+    } catch (const ExecutionInterrupted& error) {
+        // Only a local timeout can be recovered outside this budget. Parent
+        // expiration and host cancellation must unwind the enclosing scope too.
+        parent->check();
+        _execution = parent;
+        throw RaiseSignal{error.what()};
+    }
+}
+
 Value Interpreter::run(AxonNode* program) {
     if (!program || program->type != AXON_NODE_PROGRAM)
         throw std::runtime_error("interpreter: expected PROGRAM node");
 
+    _execution = std::make_shared<ExecutionControl>(_cancelled);
     try {
+        _execution->check();
         // Mark the entry file too: a circular import must not collect it again.
         if (!_source_file.empty() && _source_file.front() != '<') {
             _imported_files.insert(std::filesystem::weakly_canonical(
@@ -327,9 +342,11 @@ Value Interpreter::run(AxonNode* program) {
 
         // The selected flow's post-delay applies once, after successful execution.
         validate_delay(_flow_delay, "flow");
-        Value result = exec_flow(_global_env);
-        axon_sleep(_flow_delay);
-        return result;
+        return with_timeout(_flow_timeout, "flow", [&] {
+            Value result = exec_flow(_global_env);
+            sleep_checked(_flow_delay);
+            return result;
+        });
     } catch (const RaiseSignal& raised) {
         // Axon try/catch handles these signals inside the language. If one
         // escapes the program, expose a standard host error rather than abort.
@@ -448,6 +465,8 @@ void Interpreter::collect(AxonNode* prog, EnvPtr env) {
             for (size_t j = 0; j < s->as.flow_def.entries.count; ++j) {
                 auto& kv = s->as.flow_def.entries.items[j];
                 Value v  = eval(kv.value, env);
+                if (kv.key && std::string(kv.key) == "timeout" && v.kind != Value::Kind::Number)
+                    throw std::runtime_error("flow: timeout must be a number");
                 // Set flow.key (current active flow)
                 env->set(std::string("flow.") + kv.key, v);
                 // Add to flow dict for FlowName.key access
@@ -584,8 +603,11 @@ void Interpreter::collect_agent(AxonNode* node, EnvPtr env) {
             def.compute = to_string(v);
         else if (key == "delay" && v.kind == Value::Kind::Number)
             def.delay = v.n;
-        else if (key == "timeout" && v.kind == Value::Kind::Number)
+        else if (key == "timeout") {
+            if (v.kind != Value::Kind::Number)
+                throw std::runtime_error("agent " + std::string(def.name) + ": timeout must be a number");
             def.timeout = v.n;
+        }
     }
 
     // Index tasks by name AND preserve declaration order
@@ -649,12 +671,14 @@ Value Interpreter::exec_graph_from(const std::string& agent_name,
     agent_env->set("__input__", input);
 
     bool  success = true;
+    bool  raised = false;
     Value output  = Value::null();
 
     try {
         output  = exec_agent(it->second, input, agent_env);
         success = !output.is_null();
     } catch (const RaiseSignal& r) {
+        raised = true;
         success = false;
         output  = Value::from(r.message);
         log(AXON_LOG_WARN, "Agent '" + agent_name + "' raised: " + r.message);
@@ -663,12 +687,12 @@ Value Interpreter::exec_graph_from(const std::string& agent_name,
     // GAP 1+4: find and evaluate matching edges
     auto edges = _graph->edges_from({agent_name});
 
-    if (edges.empty()) return output;  // end of graph
+    if (edges.empty()) {
+        if (raised) throw RaiseSignal{to_string(output)};
+        return output;
+    }
 
     for (auto& edge : edges) {
-        if (edge.to.value == "done") return output;
-        if (edge.to.value == "fail") return Value::null();
-
         bool follow = false;
 
         // Unconditional edge (no on_success, no on_fail, no condition)
@@ -698,11 +722,19 @@ Value Interpreter::exec_graph_from(const std::string& agent_name,
         }
 
         if (follow) {
+            if (raised && (edge.to.value == "done" || edge.to.value == "fail") && !edge.on_fail)
+                throw RaiseSignal{to_string(output)};
+            if (edge.to.value == "done") return output;
+            if (edge.to.value == "fail") {
+                if (raised) throw RaiseSignal{to_string(output)};
+                return Value::null();
+            }
             return exec_graph_from(edge.to.value, output, env);
         }
     }
 
-    // No edge matched → end of flow
+    // An unhandled failure must not become a successful CLI result.
+    if (raised) throw RaiseSignal{to_string(output)};
     return output;
 }
 
@@ -712,6 +744,7 @@ Value Interpreter::exec_graph_from(const std::string& agent_name,
 Value Interpreter::exec_agent(const AgentDef& def,
                                Value           input,
                                EnvPtr          flow_env) {
+    return with_timeout(def.timeout, "agent " + std::string(def.name), [&]() -> Value {
     validate_delay(def.delay, "agent " + std::string(def.name));
     const AgentDef* previous = _current_agent;
     TaskFrame frame{&def, {}};
@@ -748,8 +781,9 @@ Value Interpreter::exec_agent(const AgentDef& def,
         return current;
     };
     Value result = execute();
-    axon_sleep(def.delay);
+    sleep_checked(def.delay);
     return result;
+    });
 }
 
 const Value* Interpreter::find_task_output(const std::string& agent,
@@ -809,6 +843,17 @@ Value Interpreter::resolve_task_input(const AgentDef& def, AxonNode* task,
 Value Interpreter::exec_task(const AgentDef& def, const std::string& name,
                               AxonNode* task, EnvPtr env, Value default_input,
                               bool explicit_input) {
+    double timeout = 0;
+    for (size_t i = 0; i < task->as.task_def.entries.count; ++i) {
+        const auto& entry = task->as.task_def.entries.items[i];
+        if (entry.key && std::string(entry.key) == "timeout") {
+            Value value = eval(entry.value, env);
+            if (value.kind != Value::Kind::Number)
+                throw std::runtime_error("task " + name + ": timeout must be a number");
+            timeout = value.n;
+        }
+    }
+    return with_timeout(timeout, "task " + std::string(def.name) + "." + name, [&]() -> Value {
     Value input = explicit_input ? default_input
                                 : resolve_task_input(def, task, env, default_input);
     EnvPtr task_env = child_env(env);
@@ -846,10 +891,11 @@ Value Interpreter::exec_task(const AgentDef& def, const std::string& name,
     }
     validate_delay(delay, "task " + name);
     Value result = prompts.empty() ? input : call_llm(def, prompts, input, task_env);
+    sleep_checked(delay);
     store_task_output(def, name, result);
     env->set(name, result);
-    axon_sleep(delay);
     return result;
+    });
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -918,6 +964,7 @@ Value Interpreter::exec_body(AxonNodeList* body, EnvPtr env) {
 // Execute statement
 // ─────────────────────────────────────────────────────────────
 Value Interpreter::exec_stmt(AxonNode* node, EnvPtr env) {
+    _execution->check();
     if (!node) return Value::null();
 
     // Shell interop: direct dispatch (bypasses known dispatch gap)
@@ -1055,6 +1102,7 @@ Value Interpreter::exec_for(AxonNode* node, EnvPtr env) {
     Value last = Value::null();
     if (iter.kind != Value::Kind::List) return Value::null();
     for (auto& item : iter.list) {
+        _execution->check();
         env->set(node->as.for_stmt.var, item);  // loop var in parent scope
         try {
             last = exec_body(&node->as.for_stmt.body, env);
@@ -1322,12 +1370,12 @@ Value Interpreter::call_llm(const AgentDef&                   def,
                              const Value&                      input,
                              EnvPtr                            env) {
     auto it = _providers.find(def.provider);
+    _execution->check();
     if (it == _providers.end()) {
-        if (_debug_mode)
-            std::cout << "\033[33m[axon]\033[0m Provider '"
-                      << def.provider << "' not registered — "
-                      << "skipping LLM call.\n";
-        return input;
+        const std::string message = "ProviderError: provider '" + std::string(def.provider)
+            + "' is not registered";
+        _global_env->set("__last_llm_error__", Value::from(message));
+        throw RaiseSignal{message};
     }
 
     // Build message list
@@ -1370,7 +1418,10 @@ Value Interpreter::call_llm(const AgentDef&                   def,
     log("  → " + std::string(def.provider) + "/" + def.model);
 
     try {
+        req.control = _execution;
+        _global_env->set("__last_llm_error__", Value::null());
         LLMResponse resp = it->second->complete(req);
+        _execution->check();
 
         log("  ← " + std::to_string(resp.tokens_out) + " tokens "
             + "(" + std::to_string((int)resp.latency_ms) + "ms)");
@@ -1389,20 +1440,13 @@ Value Interpreter::call_llm(const AgentDef&                   def,
 
         return Value::from(raw);
 
+    } catch (const ExecutionInterrupted&) {
+        throw;
     } catch (const std::exception& e) {
-        std::string err_msg = e.what();
-        std::cerr << "\n\033[31m[llm error]\033[0m " << err_msg << "\n";
-
-        // Parse useful info from the error
-        if (err_msg.find("context") != std::string::npos ||
-            err_msg.find("tokens") != std::string::npos) {
-            std::cerr << "  Tip: reduce input size or add 'num_ctx = N' to your agent\n";
-            std::cerr << "  Example: num_ctx = 65536  (or any value your GPU supports)\n\n";
-        }
-
-        // Store last error so the user can check it
-        _global_env->set("__last_llm_error__", Value::from(err_msg));
-        return Value::null();
+        const std::string message = "ProviderError: " + std::string(def.provider)
+            + "/" + def.model + ": " + e.what();
+        _global_env->set("__last_llm_error__", Value::from(message));
+        throw RaiseSignal{message};
     }
 }
 
@@ -1410,6 +1454,7 @@ Value Interpreter::call_llm(const AgentDef&                   def,
 // Expression evaluation
 // ─────────────────────────────────────────────────────────────
 Value Interpreter::eval(AxonNode* node, EnvPtr env) {
+    _execution->check();
     if (!node) return Value::null();
 
     switch (node->type) {
@@ -2005,7 +2050,7 @@ Value Interpreter::eval_call(AxonNode* node, EnvPtr env) {
         for (size_t i = 0; i < node->as.func_call.args.count; ++i)
             sargs.push_back(eval(node->as.func_call.args.items[i], env));
         double secs = sargs.empty() ? 0.0 : sargs[0].n;
-        if (secs > 0) axon_sleep(secs);
+        if (secs > 0) sleep_checked(secs);
         return Value::null();
     }
         if (callee.kind == Value::Kind::String && callee.s == "__builtin_print__") {
@@ -2323,7 +2368,9 @@ Value Interpreter::eval_task_call(AxonNode* node, EnvPtr env) {
         EnvPtr task_env = child_env(env);
         task_env->set("__input__", input);
         for (const auto& item : def.tasks) task_env->set(item.first, Value::from(item.first));
-        return exec_task(def, task_name, task->second, task_env, input, true);
+        return with_timeout(def.timeout, "agent " + agent_name, [&] {
+            return exec_task(def, task_name, task->second, task_env, input, true);
+        });
     }
 
     // Run full agent
@@ -2840,7 +2887,7 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
         double secs = args.empty() ? 0.0 : args[0].n;
         if (secs > 0) {
             log(AXON_LOG_INFO, "sleep: " + std::to_string(secs) + "s");
-            axon_sleep(secs);
+            sleep_checked(secs);
         }
         return Value::null();
     }

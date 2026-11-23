@@ -218,12 +218,35 @@ seconds and apply after successful completion: task before continuing, whole age
 returning, and selected flow after program execution. A task called directly does not incur
 the whole-agent delay. No post-delay is forced after an error.
 
-`timeout` enforcement and cancellation are pending. A timeout declaration does not limit execution.
+`timeout` is a total elapsed budget in seconds on flows, agents and tasks. Zero inherits the parent
+limit; an inner timeout cannot extend it. Budgets include post-delays. An agent/task `TimeoutError`
+can be caught outside that scope while the parent remains active. A flow timeout or host cancellation
+ends the run. See [execution control](EXECUTION_CONTROL.md) for cooperative limits and the host API.
+
+<!-- axon-check: run -->
+```axon
+flow Demo { timeout=2 debug=false }
+agent Processor {
+    task Slow { timeout=0.02 delay=1 }
+    task Fast { input=__input__ }
+}
+main {
+    caught=false
+    try { Processor->Slow(1) } catch err {
+        if err.find("TimeoutError:") != 0 { raise "wrong timeout error" }
+        caught=true
+    }
+    if caught == false { raise "task timeout was ignored" }
+    if Processor->Fast(42) != 42 { raise "recovery failed" }
+}
+```
+
 `parallel` blocks currently execute sequentially.
 
 The CLI registers the Ollama adapter when its local service is available. Additional provider
 names, transport declarations and endpoint metadata do not establish working adapters.
-Provider-unavailable passthrough must not be reported as generated model output.
+Missing providers and adapter failures raise catchable `ProviderError` values; no input passthrough
+or silent `null` is returned for a failed model request.
 `compute`, GPU/context/batch options and fallback depend on the adapter and installed Ollama/model;
 CI does not verify GPU placement, VRAM usage or every option. The executable does not bundle models.
 

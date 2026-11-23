@@ -4,9 +4,8 @@
  * Provider adapter for Ollama local LLM server.
  * Calls the Ollama REST API (default: http://localhost:11434).
  *
- * No external HTTP libraries required for Phase 2B —
- * uses a minimal blocking TCP socket implementation.
- * Phase 4 will replace this with libcurl for full provider support.
+ * Uses a minimal interruptible TCP socket implementation for the local adapter.
+ * General-purpose HTTP/HTTPS transport remains a separate module.
  *
  * Ollama API reference:
  *   POST /api/chat
@@ -23,6 +22,9 @@
 #include <cstring>
 #include <chrono>
 #include <iostream>
+#include <algorithm>
+#include <cctype>
+#include <cerrno>
 
 // ── Platform socket includes ─────────────────────────────────
 #ifdef AXON_OS_WINDOWS
@@ -35,6 +37,8 @@
   #define AXON_INVALID_SOCKET INVALID_SOCKET
   #define axon_close_socket closesocket
 #else
+  #include <fcntl.h>
+  #include <sys/select.h>
   #include <sys/socket.h>
   #include <netinet/in.h>
   #include <arpa/inet.h>
@@ -117,113 +121,158 @@ static std::string json_get(const std::string& json,
 class MinimalHttp {
 public:
     struct Response {
-        int         status = 0;
+        int status = 0;
         std::string body;
         std::string error;
     };
 
-    static Response post(const std::string& host,
-                         int                port,
-                         const std::string& path,
-                         const std::string& body,
-                         int                timeout_ms = 30000) {
-        Response resp;
-
+    static bool initialize() {
 #ifdef AXON_OS_WINDOWS
-        static bool wsa_init = false;
-        if (!wsa_init) {
-            WSADATA wd; WSAStartup(MAKEWORD(2,2), &wd);
-            wsa_init = true;
-        }
-#endif
-        // Resolve host
-        struct addrinfo hints{}, *res = nullptr;
-        hints.ai_family   = AF_INET;
-        hints.ai_socktype = SOCK_STREAM;
-        std::string port_str = std::to_string(port);
-
-        if (getaddrinfo(host.c_str(), port_str.c_str(), &hints, &res) != 0) {
-            resp.error = "Could not resolve host: " + host;
-            return resp;
-        }
-
-        SocketFd sock = socket(res->ai_family, res->ai_socktype, 0);
-        if (sock == AXON_INVALID_SOCKET) {
-            freeaddrinfo(res);
-            resp.error = "Socket creation failed";
-            return resp;
-        }
-
-        // Set receive timeout
-#ifdef AXON_OS_WINDOWS
-        DWORD tv = (DWORD)timeout_ms;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&tv, sizeof(tv));
+        static const bool ready = [] { WSADATA wd; return WSAStartup(MAKEWORD(2,2), &wd) == 0; }();
+        return ready;
 #else
-        struct timeval tv;
-        tv.tv_sec  = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        return true;
 #endif
+    }
 
-        if (connect(sock, res->ai_addr, (int)res->ai_addrlen) != 0) {
-            axon_close_socket(sock);
-            freeaddrinfo(res);
-            resp.error = "Connection refused — is Ollama running? "
-                         "(ollama serve)";
-            return resp;
+    static bool pending() {
+#ifdef AXON_OS_WINDOWS
+        const int error = WSAGetLastError();
+        return error == WSAEWOULDBLOCK || error == WSAEINPROGRESS || error == WSAEINTR;
+#else
+        return errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS || errno == EINTR;
+#endif
+    }
+
+    static Response post(const std::string& host, int port, const std::string& path,
+                         const std::string& body, int timeout_ms = 30000,
+                         std::shared_ptr<const ExecutionControl> inherited = nullptr,
+                         const std::string& method = "POST") {
+        Response response;
+        // An explicit language budget replaces the default transport timeout.
+        // With no language deadline, the transport still has a 30s default.
+        ExecutionControl control = inherited ? *inherited : ExecutionControl();
+        if (!control.has_deadline())
+            control = control.child(timeout_ms / 1000.0, "Ollama request");
+        control.check();
+        if (!initialize()) { response.error = "Socket initialization failed"; return response; }
+        addrinfo hints{}, *addresses = nullptr;
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        const std::string service = std::to_string(port);
+        // OS hostname resolution is synchronous; it cannot be forcibly interrupted.
+        if (getaddrinfo(host.c_str(), service.c_str(), &hints, &addresses) != 0) {
+            response.error = "Could not resolve host: " + host;
+            return response;
         }
-        freeaddrinfo(res);
-
-        // Build HTTP request
-        std::string request =
-            "POST " + path + " HTTP/1.1\r\n"
-            "Host: " + host + ":" + port_str + "\r\n"
-            "Content-Type: application/json\r\n"
-            "Content-Length: " + std::to_string(body.size()) + "\r\n"
-            "Connection: close\r\n"
-            "\r\n" + body;
-
-        // Send
+        std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> address_guard(addresses, freeaddrinfo);
+        control.check();
+        SocketFd socket_fd = socket(addresses->ai_family, addresses->ai_socktype, 0);
+        if (socket_fd == AXON_INVALID_SOCKET) { response.error = "Socket creation failed"; return response; }
+        struct SocketGuard {
+            SocketFd fd;
+            ~SocketGuard() { axon_close_socket(fd); }
+        } socket_guard{socket_fd};
+#ifdef AXON_OS_WINDOWS
+        u_long nonblocking = 1;
+        if (ioctlsocket(socket_fd, FIONBIO, &nonblocking) != 0) {
+#else
+        const int flags = fcntl(socket_fd, F_GETFL, 0);
+        if (flags < 0 || fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+#endif
+            response.error = "Could not enable interruptible socket I/O";
+            return response;
+        }
+#ifndef AXON_OS_WINDOWS
+        if (socket_fd >= FD_SETSIZE) { response.error = "Socket exceeds select limit"; return response; }
+#endif
+#ifdef SO_NOSIGPIPE
+        int no_sigpipe = 1;
+        setsockopt(socket_fd, SOL_SOCKET, SO_NOSIGPIPE, &no_sigpipe, sizeof(no_sigpipe));
+#endif
+        auto wait_ready = [&](bool write) {
+            for (;;) {
+                control.check();
+                fd_set descriptors;
+                FD_ZERO(&descriptors);
+                FD_SET(socket_fd, &descriptors);
+                timeval interval{0, 10000};
+#ifdef AXON_OS_WINDOWS
+                const int nfds = 0;
+#else
+                const int nfds = socket_fd + 1;
+#endif
+                int ready = select(nfds, write ? nullptr : &descriptors,
+                                   write ? &descriptors : nullptr, nullptr, &interval);
+                if (ready > 0) { control.check(); return true; }
+                if (ready < 0 && !pending()) return false;
+            }
+        };
+        if (connect(socket_fd, addresses->ai_addr, static_cast<int>(addresses->ai_addrlen)) != 0) {
+            if (!pending() || !wait_ready(true)) {
+                response.error = "Connection failed — is Ollama running? (ollama serve)";
+                return response;
+            }
+            int error = 0;
+#ifdef AXON_OS_WINDOWS
+            int size = sizeof(error);
+#else
+            socklen_t size = sizeof(error);
+#endif
+            if (getsockopt(socket_fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&error), &size) != 0 || error) {
+                response.error = "Connection failed — is Ollama running? (ollama serve)";
+                return response;
+            }
+        }
+        const std::string request = method + " " + path + " HTTP/1.1\r\nHost: " + host + ":" + service
+            + "\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.size())
+            + "\r\nConnection: close\r\n\r\n" + body;
         size_t sent = 0;
         while (sent < request.size()) {
-            int n = send(sock,
-                         request.c_str() + sent,
-                         (int)(request.size() - sent), 0);
-            if (n <= 0) {
-                axon_close_socket(sock);
-                resp.error = "Send failed";
-                return resp;
-            }
-            sent += n;
+            if (!wait_ready(true)) { response.error = "Send failed"; return response; }
+            int send_flags = 0;
+#ifdef MSG_NOSIGNAL
+            send_flags = MSG_NOSIGNAL;
+#endif
+            int count = send(socket_fd, request.data() + sent,
+                             static_cast<int>(std::min<size_t>(request.size() - sent, 65536)), send_flags);
+            if (count < 0 && pending()) continue;
+            if (count <= 0) { response.error = "Send failed"; return response; }
+            sent += static_cast<size_t>(count);
         }
-
-        // Receive
         std::string raw;
-        char buf[4096];
-        while (true) {
-            int n = recv(sock, buf, sizeof(buf) - 1, 0);
-            if (n <= 0) break;
-            buf[n] = '\0';
-            raw += buf;
+        char buffer[4096];
+        for (;;) {
+            if (!wait_ready(false)) { response.error = "Receive failed"; return response; }
+            int count = recv(socket_fd, buffer, sizeof(buffer), 0);
+            if (count < 0 && pending()) continue;
+            if (count < 0) { response.error = "Receive failed"; return response; }
+            if (count == 0) break;
+            raw.append(buffer, static_cast<size_t>(count));
         }
-        axon_close_socket(sock);
-
-        // Parse status line
-        auto status_end = raw.find("\r\n");
-        if (status_end != std::string::npos) {
-            std::string status_line = raw.substr(0, status_end);
-            auto sp1 = status_line.find(' ');
-            if (sp1 != std::string::npos)
-                resp.status = std::atoi(
-                    status_line.c_str() + sp1 + 1);
+        control.check();
+        const auto header_end = raw.find("\r\n\r\n");
+        if (header_end == std::string::npos) { response.error = "Incomplete HTTP response"; return response; }
+        std::istringstream status(raw.substr(0, raw.find("\r\n")));
+        std::string protocol;
+        status >> protocol >> response.status;
+        if (protocol.compare(0, 5, "HTTP/") != 0 || response.status < 100 || response.status > 599) {
+            response.error = "Invalid HTTP status";
+            return response;
         }
-
-        // Find body (after \r\n\r\n)
-        auto body_start = raw.find("\r\n\r\n");
-        if (body_start != std::string::npos)
-            resp.body = raw.substr(body_start + 4);
-
-        return resp;
+        response.body = raw.substr(header_end + 4);
+        std::string headers = raw.substr(0, header_end);
+        std::transform(headers.begin(), headers.end(), headers.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const auto length_pos = headers.find("\r\ncontent-length:");
+        if (length_pos != std::string::npos) {
+            const std::string length = headers.substr(length_pos + 17);
+            std::istringstream value(length);
+            size_t expected = 0;
+            if (!(value >> expected) || expected != response.body.size())
+                response.error = "Incomplete HTTP body or invalid Content-Length";
+        }
+        return response;
     }
 };
 
@@ -239,11 +288,12 @@ public:
     std::string provider_name() const override { return "ollama"; }
 
     bool is_available() override {
-        // Quick health check — GET /api/tags
-        auto resp = MinimalHttp::post(
-            _host, _port, "/api/tags", "", 3000);
-        // If connection fails, resp.error is non-empty
-        return resp.error.empty();
+        try {
+            auto resp = MinimalHttp::post(_host, _port, "/api/tags", "", 3000, nullptr, "GET");
+            return resp.error.empty() && resp.status == 200;
+        } catch (const ExecutionInterrupted&) {
+            return false;
+        }
     }
 
     LLMResponse complete(const LLMRequest& req) override {
@@ -284,7 +334,7 @@ public:
              "\"stream\":false,"
              "\"options\":" + opts + "}";
 
-        auto resp = MinimalHttp::post(_host, _port, "/api/chat", body);
+        auto resp = MinimalHttp::post(_host, _port, "/api/chat", body, 30000, req.control);
 
         if (!resp.error.empty())
             throw std::runtime_error(
@@ -305,8 +355,14 @@ public:
             if (brace != std::string::npos) {
                 // Find matching closing brace
                 int depth = 0;
+                bool quoted = false, escaped = false;
                 for (size_t i = brace; i < resp.body.size(); ++i) {
-                    if (resp.body[i] == '{') ++depth;
+                    const char c = resp.body[i];
+                    if (escaped) { escaped = false; continue; }
+                    if (quoted && c == '\\') { escaped = true; continue; }
+                    if (c == '"') { quoted = !quoted; continue; }
+                    if (quoted) continue;
+                    if (c == '{') ++depth;
                     else if (resp.body[i] == '}') {
                         if (--depth == 0) {
                             msg_block = resp.body.substr(
@@ -318,6 +374,8 @@ public:
             }
         }
 
+        if (msg_block.empty() || msg_block.find("\"content\"") == std::string::npos)
+            throw std::runtime_error("[OllamaAdapter] Invalid chat response: missing message.content");
         std::string content = json_get(msg_block, "content");
         if (content.empty())
             content = json_get(resp.body, "content");

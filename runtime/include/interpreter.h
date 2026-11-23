@@ -150,10 +150,20 @@ public:
     // Execute a parsed program
     Value run(AxonNode* program);
 
+    // Only cancellation is safe to request from another thread. All other use is single-threaded.
+    void request_cancel() noexcept { _cancelled->store(true, std::memory_order_relaxed); }
+    // Call while idle before reusing an interpreter after cancellation.
+    void reset_cancel() noexcept { _cancelled->store(false, std::memory_order_relaxed); }
+
     // Telemetry toggle
     bool telemetry = false;
 
 private:
+    Value with_timeout(double seconds, const std::string& owner,
+                       const std::function<Value()>& action);
+    void sleep_checked(double seconds) { _execution->sleep(seconds); }
+    std::shared_ptr<std::atomic<bool>> _cancelled = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<ExecutionControl> _execution = std::make_shared<ExecutionControl>(_cancelled);
     // ── First pass: collect declarations ─────────────────────
     void collect(AxonNode* program, EnvPtr env);
     void collect_agent(AxonNode* node, EnvPtr env);

@@ -1,6 +1,6 @@
 # Next usable Core release
 
-Work continues from public main `bed17df321cd2289ea608e4f90d43325101f7a7d`.
+Work continues from public main `b2421999909c10972531396b346b7a2bb382382a`.
 The maintainer has already tested the existing functionality, including Windows portable execution
 on a second machine and real Ollama task chaining. Keep that acceptance as the baseline.
 Automated regressions protect changed behavior; they do not replace those real integration checks.
@@ -14,10 +14,11 @@ the release scope is ready; changing the suffix alone does not complete that wor
 1. **Function call contract — implemented in this change.** Exact positional arity for user-defined
    functions, catchable errors, expected/actual counts, call line, and rejection before argument/body
    side effects. Preserve valid calls and existing agent/task invocation contracts.
-2. **Execution failures and limits.** Define and implement effective timeouts/cancellation across
-   interpreter execution, delays and provider requests. Settle error propagation when a model call
-   fails; the current adapter path can return `null` after logging an error. Cover these transitions
-   with focused regressions and an actual Ollama failure/recovery check.
+2. **Execution failures and limits — implemented cooperatively.** Flow/agent/task timeouts,
+   interruptible delays, host cancellation and Ollama socket budgets are covered by regressions.
+   Provider failures now propagate instead of returning `null` or input passthrough. See
+   [EXECUTION_CONTROL.md](../../docs/EXECUTION_CONTROL.md) for limits, including non-preemptible native/interop
+   calls. Real Ollama failure/recovery acceptance remains a manual check on the candidate.
 3. **Concurrent execution.** Specify environment/memory sharing and result publication before wiring
    language `parallel` blocks to the native scheduler. Remove fixed OCR temporary-file collisions
    before exposing concurrent OCR calls. Preserve sequential/task/closure contracts.

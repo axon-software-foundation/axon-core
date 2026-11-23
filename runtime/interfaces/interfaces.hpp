@@ -11,6 +11,7 @@
 
 #pragma once
 #include "../include/platform.h"
+#include "../include/execution_control.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -258,6 +259,7 @@ struct LLMRequest {
     bool                     low_vram    = false;
     bool                     gpu_fallback= false;
     std::string              compute     = "";   // auto/gpu/cpu
+    std::shared_ptr<const ExecutionControl> control; // optional cooperative deadline/cancellation
 };
 
 struct LLMResponse {

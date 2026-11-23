@@ -14,8 +14,10 @@ completed publication or the maintainer's manual validation.
 Implemented with focused regressions: functions/closures, relative imports, CLI diagnostics,
 three agent invocation forms, task input/output references, repeated-invocation isolation,
 basic task graphs and post-delays. Scheduler shutdown and strict-build portability fixes are included.
-Keep these contracts covered as the language evolves. Pending: effective deadlines/cancellation,
-actual language-level parallel execution, complete graph policy semantics and consistent arity/type errors.
+Keep these contracts covered as the language evolves. Cooperative flow/agent/task deadlines, host
+cancellation and provider-error propagation are implemented; see [EXECUTION_CONTROL.md](../../docs/EXECUTION_CONTROL.md)
+for scope and external blocking-call limits. Pending: actual language-level parallel execution,
+complete graph policy semantics and consistent native-module arity/type errors.
 
 ## 2. Publish the first alpha
 
