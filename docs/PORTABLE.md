@@ -50,3 +50,10 @@ From the extracted root, Git Bash/Linux can check `sha256sum -c MANIFEST.sha256`
 A new build needs its own checksum and acceptance; do not reuse an earlier candidate's hash.
 Checksums verify bytes, not publisher identity. Signing remains pending.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for limitations.
+
+## HTTP runtime dependencies
+
+The Windows HTTP client is a pinned static libcurl build using Schannel and the Windows certificate
+store. OpenSSL is needed to build/run the source-tree TLS fixture tests, not to run the Windows CLI.
+Unix archives use system libcurl/TLS libraries and system trust roots; install the matching runtime
+packages. Docker's runtime image installs libcurl. The curl license is included in portable notices.

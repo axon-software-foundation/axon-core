@@ -13,6 +13,7 @@
 #include <sstream>
 #include <chrono>
 #include <vector>
+#include "http_fixture.h"
 #include "../runtime/include/lexer.h"
 #include "../runtime/include/axon_parser.h"
 #include "../runtime/include/interpreter.h"
@@ -949,10 +950,30 @@ void test_negative_delay_rejected() {
     expect_error("agent A { delay=-0.01 main { return 1 } } main { A(1) }", "delay");
     expect_error("flow F { delay=-0.01 } main { return 1 }", "delay");
 }
-void test_http_absence_is_explicit() {
-    expect_error("main { http->get(\"http://127.0.0.1/\") }", "HTTP module is not implemented");
-    expect_error("main { http->post(\"http://127.0.0.1/\",\"body\") }", "HTTP module is not implemented");
-    expect_error("main { http->json(\"http://127.0.0.1/\") }", "HTTP module is not implemented");
+void test_http_contract_invalid_input() {
+    expect_error("main { http->get(\"file:///tmp/fixture\") }", "HttpError:");
+    expect_error("main { http->post(42,\"body\") }", "URL must be a string");
+    expect_error("main { http->get(\"http://127.0.0.1/\",{\"timeout\":-1}) }", "invalid option timeout");
+}
+void test_http_strict_json_response() {
+    ASSERT_EQ(run(R"(main { return http->json({"body":"{\"value\":42}"})["value"] })").n,42.0);
+    ASSERT_EQ(run(R"(main { return typeof(http->json({"body":"null"})) })").s,std::string("null"));
+    expect_error(R"(main { http->json({"body":"{\"key\":1"}) })","HttpError:");
+    expect_error(R"(main { http->json({"body":"true trailing"}) })","HttpError:");
+}
+void test_http_errors_are_catchable() {
+    ASSERT_EQ(run(R"(main {
+        caught=false
+        try { http->get("ftp://localhost/") } catch err {
+            if err.find("HttpError:") != 0 { raise "wrong HTTP error" }
+            caught=true
+        }
+        return caught
+    })").b,true);
+}
+void test_http_bad_options_rejected() {
+    expect_error(R"(main { http->get("http://127.0.0.1/",{"insecure":true}) })","unknown option insecure");
+    expect_error(R"(main { http->get("http://127.0.0.1/",{"headers":{"x-test":"bad\r\nvalue"}}) })","invalid header value");
 }
 
 void test_task_legacy_output_metadata_preserved() {
@@ -1336,6 +1357,29 @@ void test_parallel_nested_failure() {
     )","nested failure");
 }
 
+void test_http_parallel_requests_overlap() {
+    std::atomic<int> entered{0};
+    HttpFixture server([&](const std::string&) {
+        ++entered;
+        const auto limit=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(entered.load()<2) {
+            if(std::chrono::steady_clock::now()>limit) throw std::runtime_error("HTTP branches did not overlap");
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return HttpFixture::response("{\"value\":21}");
+    });
+    const std::string fetch="http->json(\""+server.url()+"\",{\"proxy\":\"\",\"timeout\":2.5})";
+    ASSERT_EQ(run("flow F { debug=false timeout=3 } main { parallel { a="+fetch+" b="+fetch+" } return a[\"value\"]+b[\"value\"] }").n,42.0);
+    ASSERT_EQ(entered.load(),2);
+}
+void test_http_local_timeout_is_catchable() {
+    HttpFixture server([](const std::string&) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        return HttpFixture::response("late");
+    });
+    const std::string source="flow F { debug=false timeout=3 } main { caught=false try { http->get(\""+server.url()+"\",{\"proxy\":\"\",\"timeout\":0.03}) } catch err { if err.find(\"TimeoutError: HTTP request\") != 0 { raise \"wrong error\" } caught=true } return caught }";
+    ASSERT_EQ(run(source).b,true);
+}
 int main() {
     std::cout << "═══════════════════════════════════════════\n";
     std::cout << "  Axon Interpreter Tests\n";
@@ -1453,7 +1497,12 @@ int main() {
     TEST(agent_post_delay);
     TEST(flow_post_delay);
     TEST(negative_delay_rejected);
-    TEST(http_absence_is_explicit);
+    TEST(http_contract_invalid_input);
+    TEST(http_strict_json_response);
+    TEST(http_errors_are_catchable);
+    TEST(http_bad_options_rejected);
+    TEST(http_parallel_requests_overlap);
+    TEST(http_local_timeout_is_catchable);
 
     TEST(task_legacy_output_metadata_preserved);
     TEST(direct_task_output_format_identifier);

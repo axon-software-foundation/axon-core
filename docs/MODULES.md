@@ -162,10 +162,33 @@ boundaries are not certified by the example. Inspect the implementation before r
 | Python | `python { ... }` | External interpreter integration exists; not required or fully validated by the baseline. Not a native Python package manager |
 | Storage | `storage->query(...)` | Stub returning an empty list; no working database driver |
 | Whisper | `whisper->transcribe(...)` | Stub returning an empty string; no working transcription integration |
-| HTTP/REST | `http->...` | Explicit not-implemented error, not a functional HTTP client |
+| HTTP/HTTPS | `http->get/post/json` | Public module in the working tree; verified TLS, structured responses and limits; see HTTP_STATUS.md |
 | MCP, gRPC, WebSockets, mesh | Design/interface work | No supported public module contract in this alpha |
 
-OCR uses fixed temporary filenames in the working directory; concurrent invocations are not safe.
+OCR uses unique temporary directories. Native calls are serialized across sibling interpreters;
+this does not make arbitrary external processes preemptible.
 Failures are returned as `[ocr] ...` strings (or null for missing arguments), not structured exceptions.
 General TLS/HTTPS support cannot be inferred from the specialized Ollama HTTP clients.
 See [HTTP_STATUS.md](HTTP_STATUS.md), [SECURITY.md](../SECURITY.md) and [ROADMAP.md](ROADMAP.md).
+
+## Public HTTP/HTTPS
+
+`http->get(url, options)` and `http->post(url, body, options)` return status, ok, body, final URL
+and lowercase header lists. `http->json(url, options)` performs GET and strictly decodes a successful
+response; `http->json(response)` decodes an existing response body, including non-2xx responses.
+See [HTTP_STATUS.md](HTTP_STATUS.md) for argument types, defaults, TLS, redirect and size limits.
+
+<!-- axon-check: run -->
+```axon
+main {
+    response={"status":200,"body":"{\"value\":42}"}
+    data=http->json(response)
+    if data["value"] != 42 { raise "HTTP JSON decoding" }
+    caught=false
+    try { http->json({"body":"not JSON"}) } catch err {
+        if err.find("HttpError:") != 0 { raise "unexpected HTTP error" }
+        caught=true
+    }
+    if caught == false { raise "invalid HTTP JSON was accepted" }
+}
+```

@@ -65,3 +65,7 @@ establish cross-distribution compatibility or a multi-architecture image.
 The Linux Docker CI job passed at baseline `7a1537f`, including runtime version/suites/task execution.
 That job does not exercise all Compose bind-mount examples; those remain environment-specific commands.
 The Ubuntu 24.04 base uses a mutable tag rather than a pinned digest; bit-for-bit reproducibility is not claimed.
+
+The build stage installs libcurl/OpenSSL development packages for public HTTP and controlled TLS
+fixtures. The runtime stage installs system libcurl and CA certificates; test keys and fixture
+executables are not copied into the image.

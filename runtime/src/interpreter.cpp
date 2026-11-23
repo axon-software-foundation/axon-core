@@ -26,6 +26,7 @@
 #include "../include/memory_store.h"
 #include "../include/document_io.h"
 #include "../include/modules.h"
+#include "../include/http_client.h"
 #include "../include/lexer.h"
 #include "../include/axon_parser.h"
 #include <sstream>
@@ -2629,11 +2630,16 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                                       const std::string&         fn,
                                       const std::vector<Value>&  args,
                                       EnvPtr                     env) {
-    auto native_guard = native_lock();
     if (mod == "http") {
-        throw std::runtime_error("http->" + fn +
-            "(): HTTP module is not implemented in this Core snapshot");
+        try { return http_module_call(fn, args, _execution); }
+        catch (const ExecutionInterrupted& error) {
+            _execution->check(); // A parent deadline/cancellation cannot be suppressed.
+            throw RaiseSignal{error.what()};
+        } catch (const std::exception& error) {
+            throw RaiseSignal{error.what()};
+        }
     }
+    auto native_guard = native_lock();
 
     // ── file->read(path, raw=false) ──────────────────────────
     if (mod == "file" && fn == "read") {

@@ -30,3 +30,6 @@ examples should include expected-value assertions and clearly declare any extern
 Parallel validation: `validation/parallel.axon` runs without providers;
 `validation/ollama_parallel.axon` requires real Ollama generation. See
 [parallel execution](../axon/docs/PARALLEL.md) for snapshot/join semantics.
+
+`validation/http.axon` is manual HTTPS acceptance against the public repository API; it requires
+Internet access. Automated HTTP/TLS fixtures use loopback and are included in CTest.

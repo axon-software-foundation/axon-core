@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Implement public GET/POST/JSON and verified HTTPS using an independent libcurl transport, with structured
+  responses, explicit errors, inherited deadlines/cancellation, limits and opt-in same-origin redirects.
+- Add controlled local HTTP/TLS fixtures and interpreter request-overlap coverage; register PDF progress
+  checks in CTest and normalize source/test paths for builds outside the source directory.
+- Build pinned minimal static curl/Schannel on Windows; use system libcurl on Unix. Document build/test
+  dependencies, runtime packaging and upstream notices. Published binaries and VERSION remain unchanged.
+
 - Execute parallel blocks and pipeline groups using bounded native scheduler jobs, lexical/closure
   snapshots, source-order result publication and cooperative sibling cancellation.
 - Preserve pipeline groups' last-declared-result convention; publish only top-level branch assignments.
