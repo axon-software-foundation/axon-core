@@ -1,5 +1,5 @@
 // Real loopback socket tests; no Ollama, Python, model or external network required.
-#include "../axon/adapters/ollama/ollama_adapter.hpp"
+#include "../adapters/ollama/ollama_adapter.hpp"
 #include <atomic>
 #include <thread>
 #include <functional>
