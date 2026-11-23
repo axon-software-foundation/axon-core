@@ -170,7 +170,8 @@ static CMap parse_cmap(const std::string& text) {
                     ++pos; unsigned int i=lv;
                     size_t al=0;
                     while(pos<len&&text[pos]!=']'&&al++<0x10000){
-                        sk(); if(text[pos]=='<'){
+                        sk(); if(pos>=len) break;
+                        if(text[pos]=='<'){
                             char buf[8]; snprintf(buf,8,lo.size()>2?"%04X":"%02X",i);
                             cmap_add(cm,std::string(buf),hex_to_uint(rd()));++i;
                         } else ++pos;
@@ -320,8 +321,21 @@ static std::string extract_text(const std::string& s, const CMap& cm) {
                         else if(ch=='('){d++;raw+=ch;}else if(ch==')'){if(--d>0)raw+=ch;}else raw+=ch;}
                     arr+=dec_lit(raw);
                 } else if(s[pos]=='<'){++pos;std::string h;while(pos<len&&s[pos]!='>') h+=s[pos++];if(pos<len)++pos;arr+=dec_hex(h);}
-                else{std::string n;while(pos<len&&(isdigit((unsigned char)s[pos])||s[pos]=='-'||s[pos]=='.'))n+=s[pos++];
-                    if(!n.empty()){try{if(std::stod(n)<-100)arr+=' ';}catch(...){}}}
+                else if(s[pos]=='%'){
+                    // Comments are valid between elements of a PDF TJ array.
+                    while(pos<len&&s[pos]!='\r'&&s[pos]!='\n') ++pos;
+                }
+                else{
+                    std::string n;
+                    while(pos<len&&(isdigit((unsigned char)s[pos])||s[pos]=='-'||s[pos]=='+'||s[pos]=='.'))
+                        n+=s[pos++];
+                    if(!n.empty()){
+                        try{if(std::stod(n)<-100)arr+=' ';}catch(...){}
+                    } else {
+                        // Unsupported/malformed tokens must still make progress.
+                        ++pos;
+                    }
+                }
             }
             if (pos < len) { ++pos; }
             ws();
