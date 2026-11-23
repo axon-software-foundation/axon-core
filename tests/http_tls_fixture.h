@@ -34,11 +34,13 @@ class HttpTlsFixture {
         check(X509_gmtime_adj(X509_getm_notBefore(cert.get()),-300)!=nullptr);
         check(X509_gmtime_adj(X509_getm_notAfter(cert.get()),86400)!=nullptr);
         check(X509_set_pubkey(cert.get(),public_key)==1);
-        X509_NAME* name=X509_get_subject_name(cert.get());
+        Ptr<X509_NAME,X509_NAME_free> name(X509_NAME_new(),X509_NAME_free);
+        check(name!=nullptr);
         const char* cn=ca?"Axon ephemeral test CA":"Axon loopback TLS fixture";
-        check(X509_NAME_add_entry_by_txt(name,"CN",MBSTRING_ASC,
+        check(X509_NAME_add_entry_by_txt(name.get(),"CN",MBSTRING_ASC,
               reinterpret_cast<const unsigned char*>(cn),-1,-1,0)==1);
-        check(X509_set_issuer_name(cert.get(),issuer?X509_get_subject_name(issuer):name)==1);
+        check(X509_set_subject_name(cert.get(),name.get())==1);
+        check(X509_set_issuer_name(cert.get(),issuer?X509_get_subject_name(issuer):name.get())==1);
         extension(cert.get(),issuer?issuer:cert.get(),NID_basic_constraints,ca?"critical,CA:TRUE,pathlen:0":"critical,CA:FALSE");
         extension(cert.get(),issuer?issuer:cert.get(),NID_key_usage,ca?"critical,keyCertSign,cRLSign":"critical,digitalSignature,keyEncipherment");
         extension(cert.get(),issuer?issuer:cert.get(),NID_subject_key_identifier,"hash");
