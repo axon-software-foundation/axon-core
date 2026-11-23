@@ -2,7 +2,7 @@
 FROM ubuntu:24.04 AS build-env
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       build-essential cmake ninja-build git ca-certificates \
+       build-essential cmake ninja-build git ca-certificates libcurl4-openssl-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 CMD ["bash"]
@@ -19,7 +19,7 @@ COPY --from=build /src/dist/ /
 
 FROM ubuntu:24.04 AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libstdc++6 ca-certificates \
+    && apt-get install -y --no-install-recommends libstdc++6 ca-certificates libcurl4t64 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 axon \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin axon \

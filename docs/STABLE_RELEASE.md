@@ -24,10 +24,11 @@ the release scope is ready; changing the suffix alone does not complete that wor
    cancellation. Existing native services and legacy adapters are synchronized; OCR/Python temporary
    directories are unique. See [PARALLEL.md](PARALLEL.md). Real Ollama and platform CI acceptance
    remain required before publication.
-4. **Public HTTP.** Specify a small public GET/POST/JSON contract; implement verified HTTPS,
-   status/headers/body, explicit errors, deadlines and resource limits. Test real requests against
-   a local fixture server, plus controlled TLS verification. The specialized Ollama client does not
-   already provide this public module. No new dependency is selected by this plan.
+4. **Public HTTP — implemented, acceptance pending.** GET/POST/JSON, verified HTTPS, total budgets,
+   resource limits, bounded same-origin redirects and structured responses use libcurl. Real local
+   HTTP/TLS fixtures cover success, trust/hostname failure and cancellation. Windows uses pinned
+   minimal static curl with Schannel; Unix uses system libcurl. See [HTTP_STATUS.md](HTTP_STATUS.md).
+   CI/package and maintainer HTTPS acceptance remain required before publication.
 5. **Remaining release blockers.** Address confirmed failures in the selected modules, document
    explicit support boundaries for document formats/memory/interop, and migrate examples advertised
    as runnable. Add fixtures where they expose a concrete unsupported edge or protect a fix.

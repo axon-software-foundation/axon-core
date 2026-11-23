@@ -5,6 +5,7 @@ the licenses of embedded components or toolchain runtime code.
 
 | Component | Source | License / distributed text |
 | --- | --- | --- |
+| libcurl, bundled Windows HTTP build | https://curl.se / https://github.com/curl/curl | curl license, licenses/curl.txt; pinned 8.23.0 archive below |
 | hnswlib headers | https://github.com/nmslib/hnswlib | Apache 2.0, licenses/hnswlib-Apache-2.0.txt |
 | zlib 1.3.2 sources | https://zlib.net | zlib notice, licenses/zlib.txt |
 | stb_image, stb_image_write, stb_image_resize2 | https://github.com/nothings/stb | Embedded dual license preserved in licenses/stb_*.txt (MIT option available) |
@@ -77,3 +78,17 @@ For v0.4.0-alpha.1, this clarification may accompany the existing tagged
 artifacts as release metadata or a supplemental notice. It does not change
 that tag, its source archive, packaged notices or already-built checksums.
 Future builds should carry this updated notice together with the source.
+
+## Public HTTP transport
+
+Windows builds fetch curl 8.23.0 from the official curl/curl GitHub release and verify
+SHA256 `8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5`.
+The minimal static build uses Windows Schannel; optional third-party compression/IDN/SSH/HTTP2
+dependencies are disabled. The unmodified release COPYING is preserved as licenses/curl.txt.
+Source URL: https://github.com/curl/curl/releases/download/curl-8_23_0/curl-8.23.0.tar.xz
+
+Unix builds link the system libcurl and its system TLS/runtime dependencies instead. Their
+licenses remain applicable; this package does not bundle those shared libraries. OpenSSL is
+also a build/test dependency for the controlled TLS fixture; that fixture executable and test
+private key are not part of portable runtime payloads. The optional bundled-curl Unix build uses
+system OpenSSL. Review exact dependencies and notices when changing this configuration.

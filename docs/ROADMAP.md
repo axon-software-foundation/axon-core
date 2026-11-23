@@ -43,13 +43,15 @@ and declared platforms to be complete; RC/stable require resolved blockers and a
 
 ## 4. Communications and integrations
 
-- HTTP/REST: implement a public module with GET/POST/JSON, HTTPS verification, status/headers/body,
-  errors, deadlines, redirects and limits; add real local-server integration tests. See [HTTP_STATUS.md](HTTP_STATUS.md).
+- HTTP/REST: GET/POST/JSON with verified HTTPS, status/headers/body, errors, deadlines, bounded
+  same-origin redirects and limits is implemented in the working tree, with real local HTTP/TLS
+  fixtures. Cross-platform/package acceptance is required before publication. See [HTTP_STATUS.md](HTTP_STATUS.md).
 - gRPC, WebSockets and sockets: reconcile parser/interface plans with working transports and tests.
 - MCP: define client/server role, protocol version, capabilities, transport, authorization,
   connection lifecycle, cancellation and errors. MCP is not an alias for REST or gRPC.
 
-These are future implementation blocks; the existing specialized Ollama HTTP clients are not a public HTTP module.
+The public HTTP module remains independent of the specialized Ollama HTTP clients. gRPC, WebSockets
+and MCP remain future implementation blocks. HTML parsing/scraping follows HTTP and is not implemented here.
 
 ## 5. Language and multi-flow
 

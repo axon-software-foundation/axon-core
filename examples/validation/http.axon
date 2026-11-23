@@ -1,0 +1,14 @@
+# Manual HTTPS acceptance; requires Internet access, not Ollama.
+flow Network { debug=false timeout=30 }
+main {
+    response=http->get("https://api.github.com/repos/axon-software-foundation/axon-core",
+                       {"timeout":10,"max_body_bytes":1048576,
+                        "headers":{"Accept":"application/vnd.github+json"}})
+    print("HTTP status: ",response["status"])
+    if response["ok"] == false { raise "GitHub returned a non-success status" }
+    repository=http->json(response)
+    if repository["name"] != "axon-core" { raise "unexpected repository response" }
+    print("Repository: ",repository["full_name"])
+    print("Default branch: ",repository["default_branch"])
+    print("PASS live HTTPS")
+}

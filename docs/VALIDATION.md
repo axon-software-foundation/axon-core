@@ -30,9 +30,9 @@ The baseline's external-service detection can print an informational Ollama-unav
 ## What the checks establish
 
 - Runtime suite: 33 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 124 cases covering expressions, functions, task input/output and delays, among others.
+- Interpreter suite: 129 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 30 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 32 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
@@ -42,7 +42,12 @@ The baseline's external-service detection can print an informational Ollama-unav
 - `provider.transport` adds nine real loopback socket cases; no model or external network is used.
 - `cli.flow_timeout` and `cli.provider_missing` assert exit status 1 for unhandled errors.
 - CLI negative cases must appear passed: the test asserts the expected failure/diagnostic of the program.
-- `cli.http_unavailable` proves a clear not-implemented diagnostic, not a working HTTP module.
+- `cli.http_invalid_url` rejects non-HTTP schemes without an external request.
+- `http.transport` has 14 local HTTP/TLS cases, including trusted CA and failed trust/hostname checks.
+  TLS fixtures generate a temporary PKI and serve a signed CRL over loopback for Schannel.
+  The revoked-chain case checks OpenSSL CRL validation everywhere and the HTTP client on Schannel.
+- Interpreter HTTP cases include strict JSON/options, catchable timeouts and rendezvous-proven request overlap.
+- `pdf.progress` now registers the standalone PDF regression in CTest.
 - A recording provider in interpreter tests verifies actual constructed messages; it is not a production
   provider and is not evidence of live model responses.
 
@@ -58,6 +63,11 @@ The runtime suite includes intentional invalid actor transitions; their diagnost
 when the enclosing negative test passes.
 
 ## Recorded platform evidence
+
+The public HTTP working-tree change passed strict local Linux GCC 14.2 Release tests. The HTTP/TLS
+transport suite also passed against the pinned minimal curl 8.23.0 build. The existing 33 runtime
+cases and expanded 129 interpreter cases remain part of CTest. These observations do not validate
+Windows Schannel, macOS, Docker or the final packaged download; those require this change's CI.
 
 The parallel change passed local strict Linux GCC 14.2 Release validation. Its added cases include
 21 interpreter concurrency/isolation cases, two generic scheduler cases and two CLI checks.

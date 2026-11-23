@@ -100,12 +100,14 @@ if(WIN32)
     target_compile_definitions(axon_core INTERFACE WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/Http.cmake)
+
 # ── axon CLI (the main executable) ───────────────────────────
 add_executable(axon
     cli/main.cpp
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
-        ../runtime/src/interpreter.cpp
+        runtime/src/interpreter.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -124,19 +126,19 @@ set(ZLIB_SRCS
 )
 
 target_sources(axon PRIVATE ${ZLIB_SRCS})
-target_link_libraries(axon PRIVATE axon_core)
+target_link_libraries(axon PRIVATE axon_core axon_http)
 target_include_directories(axon PRIVATE third_party/zlib "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # ── Test runner binary ────────────────────────────────────────
-add_executable(axon_test_runtime ../tests/test_runtime.cpp)
+add_executable(axon_test_runtime tests/test_runtime.cpp)
 target_link_libraries(axon_test_runtime PRIVATE axon_core)
 
 # ── Interpreter test binary ───────────────────────────────────
 add_executable(axon_test_interp
-        ../tests/test_interpreter.cpp
+        tests/test_interpreter.cpp
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
-        ../runtime/src/interpreter.cpp
+        runtime/src/interpreter.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -145,11 +147,22 @@ add_executable(axon_test_interp
     runtime/src/modules.cpp
 )
 target_sources(axon_test_interp PRIVATE ${ZLIB_SRCS})
-target_link_libraries(axon_test_interp PRIVATE axon_core)
+target_link_libraries(axon_test_interp PRIVATE axon_core axon_http)
 target_include_directories(axon_test_interp PRIVATE third_party/zlib)
 
 # ── Automated tests: no Python, Ollama or network required ─────
 if(BUILD_TESTING)
+    find_package(OpenSSL REQUIRED)
+    add_executable(axon_test_http ../tests/test_http.cpp runtime/src/document_io.cpp)
+    target_link_libraries(axon_test_http PRIVATE axon_core axon_http OpenSSL::SSL OpenSSL::Crypto)
+    target_compile_definitions(axon_test_http PRIVATE AXON_HTTP_TEST_TLS)
+    add_test(NAME http.transport COMMAND axon_test_http "../tests/fixtures/http")
+    set_tests_properties(http.transport PROPERTIES TIMEOUT 30)
+    add_test(NAME pdf.progress COMMAND ${CMAKE_COMMAND}
+        "-DAXON_EXE=$<TARGET_FILE:axon>"
+        "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/pdf-regression"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pdf_progress.cmake")
+    set_tests_properties(pdf.progress PROPERTIES TIMEOUT 50)
     add_executable(axon_test_provider tests/test_provider.cpp)
     target_link_libraries(axon_test_provider PRIVATE axon_core)
     add_test(NAME provider.transport COMMAND axon_test_provider)
@@ -161,7 +174,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_unavailable function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure)
+            task_contract http_invalid_url function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"
@@ -169,7 +182,7 @@ if(BUILD_TESTING)
                 "-DTEST_CASE=${case_name}"
                 "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cli-cases"
                 "-DVALIDATION_DIR=${CMAKE_CURRENT_SOURCE_DIR}/examples/validation"
-                -P "../tests/test_cli.cmake")
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cli.cmake")
         set_tests_properties(cli.${case_name} PROPERTIES TIMEOUT 20)
     endforeach()
     set_tests_properties(runtime interpreter PROPERTIES TIMEOUT 30)

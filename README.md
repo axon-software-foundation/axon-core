@@ -47,6 +47,10 @@ Use a new build directory when changing compilers or generators; set `AXON_BUILD
 `build-validation`. See [validation](docs/VALIDATION.md), [CI](docs/CI.md) and
 [Docker](DOCKER_BUILD.md). For portable archives, use [releasing](docs/RELEASING.md).
 
+HTTP build dependencies: Linux `libcurl4-openssl-dev libssl-dev`; macOS system libcurl and
+OpenSSL from Homebrew; Windows MSYS2 `mingw-w64-ucrt-x86_64-openssl` for TLS fixture tests.
+Windows downloads/builds the pinned minimal libcurl on first configure. See [HTTP](docs/HTTP_STATUS.md).
+
 ## Agent and task example
 
 This example needs a running Ollama service and the `llama3.2` model (`ollama pull llama3.2`).
@@ -90,7 +94,9 @@ APIs and their testing limits.
 
 Execution budgets and host cancellation are documented in [execution control](docs/EXECUTION_CONTROL.md).
 
-**Pending:** public HTTP/REST and MCP modules, additional LLM providers, complete multi-flow ownership
+Public GET/POST/JSON and verified HTTPS are documented in [HTTP](docs/HTTP_STATUS.md).
+
+**Pending:** MCP/gRPC/WebSockets, HTML scraping, additional LLM providers, complete multi-flow ownership
 and distributed mesh.
 A parser declaration or C++ interface is not evidence of a working language feature.
 
