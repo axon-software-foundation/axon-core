@@ -30,14 +30,17 @@ The baseline's external-service detection can print an informational Ollama-unav
 ## What the checks establish
 
 - Runtime suite: 31 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 86 cases covering expressions, functions, task input/output and delays, among others.
+- Interpreter suite: 103 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 25 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 28 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
   `run` or `check`: self-contained examples execute with assertions, model-dependent examples receive
   syntax checks only. An unmarked fence, parser error, execution error or timeout fails the check.
+- Seventeen execution-control cases cover budgets, inheritance, cancellation and provider failures.
+- `provider.transport` adds nine real loopback socket cases; no model or external network is used.
+- `cli.flow_timeout` and `cli.provider_missing` assert exit status 1 for unhandled errors.
 - CLI negative cases must appear passed: the test asserts the expected failure/diagnostic of the program.
 - `cli.http_unavailable` proves a clear not-implemented diagnostic, not a working HTTP module.
 - A recording provider in interpreter tests verifies actual constructed messages; it is not a production
@@ -55,6 +58,10 @@ The runtime suite includes intentional invalid actor transitions; their diagnost
 when the enclosing negative test passes.
 
 ## Recorded platform evidence
+
+The execution-control patch was built locally on Linux GCC 14.2 Release with warnings as errors
+and fortified headers. Its 28 CTest entries passed, including 103 interpreter cases and nine transport
+fixture cases. Windows/macOS and real Ollama failure/recovery require acceptance of this patch.
 
 The strict user-function arity change was locally built on Linux with GCC 14.2, Release,
 `AXON_WARNINGS_AS_ERRORS=ON` and `_FORTIFY_SOURCE=2`. All 25 CTest entries passed, including

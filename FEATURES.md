@@ -15,7 +15,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | Task inputs/cached results | Implemented and tested | `test_task_*`; recording adapter only in tests, plus manual live Ollama check |
 | Basic task/agent graphs | Selected chains validated | `test_task_graph_input_contract`, `test_graph_execution_order`; complete policies not certified |
 | Post-delays | Implemented, measured tests | Task/agent/flow success paths; delays are not deadlines |
-| Ollama generation | Adapter implemented; manual integration evidence | Not run by baseline CI; missing-service passthrough is not generation |
+| Ollama generation | Adapter implemented; manual integration evidence | Live generation is manual; transport fixtures run in CI; missing services raise ProviderError |
 | JSON/CSV/files/regex/dates | Implemented; selected Markdown execution checks | See `docs/MODULES.md`; malformed-input and calendar edge cases need broader coverage |
 | SHA-256, MD5, codecs | Implemented; known vectors/roundtrips | SHA-1/SHA-512 explicitly unsupported |
 | Key-value memory | Implemented; selected checks | String values, explicit persistence; no automatic typed object storage |
@@ -29,7 +29,8 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | Storage/Whisper | Stubs | Empty placeholder responses; not database/transcription support |
 | HTTP/REST | Not implemented | Explicit unavailable diagnostic; test checks absence, not requests |
 | MCP/gRPC/WebSockets/mesh | Pending public implementation/integration | Parser fields/interfaces are not operational transports |
-| Timeouts/cancellation/parallelism | Pending | `parallel` remains sequential |
+| Timeouts and host cancellation | Cooperative implementation and focused regressions | See `docs/EXECUTION_CONTROL.md`; native/interop blocking calls are not preempted |
+| Language parallelism | Pending | `parallel` remains sequential |
 | Additional providers, training, automatic RAG | Pending | See roadmap; no guarantees inferred from declarations |
 
 Current references: [language](docs/LANGUAGE.md), [modules](docs/MODULES.md),

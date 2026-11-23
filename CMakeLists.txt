@@ -150,6 +150,10 @@ target_include_directories(axon_test_interp PRIVATE third_party/zlib)
 
 # ── Automated tests: no Python, Ollama or network required ─────
 if(BUILD_TESTING)
+    add_executable(axon_test_provider tests/test_provider.cpp)
+    target_link_libraries(axon_test_provider PRIVATE axon_core)
+    add_test(NAME provider.transport COMMAND axon_test_provider)
+    set_tests_properties(provider.transport PROPERTIES TIMEOUT 15)
     add_test(NAME runtime COMMAND axon_test_runtime)
     add_test(NAME interpreter COMMAND axon_test_interp)
     add_executable(axon_test_exit tests/test_exit.cpp)
@@ -157,7 +161,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_unavailable function_arity imported_function_arity)
+            task_contract http_unavailable function_arity imported_function_arity flow_timeout provider_missing)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"
@@ -194,7 +198,7 @@ install(TARGETS axon axon_test_runtime axon_test_interp DESTINATION bin)
 install(DIRECTORY runtime/include/ runtime/interfaces/ DESTINATION include/axon)
 install(FILES LICENSE VERSION THIRD_PARTY_NOTICES.md DESTINATION share/axon)
 install(DIRECTORY licenses/ DESTINATION share/axon/licenses)
-install(FILES docs/LANGUAGE.md docs/MODULES.md DESTINATION share/axon/docs)
+install(FILES docs/LANGUAGE.md docs/MODULES.md docs/EXECUTION_CONTROL.md DESTINATION share/axon/docs)
 install(DIRECTORY examples/ DESTINATION share/axon/examples)
 # Portable packages use a curated payload and validate the extracted archive.
 include(cmake/Portable.cmake)

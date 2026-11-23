@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Enforce cooperative flow/agent/task timeouts, including inherited deadlines and post-delays;
+  add host cancellation and interruptible sleep/Ollama socket operations.
+- Raise catchable provider failures instead of returning input passthrough or silent null. Preserve
+  valid non-LLM null results and existing graph failure routes; unhandled graph raises fail the CLI.
+- Use GET and HTTP status for Ollama health; reject incomplete response bodies and missing chat fields.
+- Add 17 interpreter cases, nine real loopback transport cases, two CLI checks and a checked timing
+  example. Document non-preemptible native/interop operations and add manual live-model recovery validation.
+
 - Require exact positional arity for user-defined functions, including closures, anonymous/arrow
   functions and imported functions. Invalid calls raise a catchable `ArityError` before evaluating
   arguments or executing the body. Existing code that relied on missing arguments becoming `null`

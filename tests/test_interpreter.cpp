@@ -85,7 +85,7 @@ public:
 };
 
 static Value run_recorded(const std::string& source,
-                          const std::shared_ptr<RecordingProvider>& provider) {
+                          const std::shared_ptr<IProviderAdapter>& provider) {
     std::unique_ptr<AxonArena, decltype(&axon_arena_free)> arena(
         axon_arena_new(256 * 1024), &axon_arena_free);
     Lexer lexer(source, "<recorded-test>");
@@ -975,6 +975,163 @@ void test_direct_task_output_format_identifier() {
 // ─────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────
+static void expect_execution_error(const std::string& source, const std::string& text) {
+    try { run(source); }
+    catch (const std::runtime_error& error) {
+        ASSERT_TRUE(std::string(error.what()).find(text) != std::string::npos);
+        return;
+    }
+    throw std::runtime_error("expected execution error: " + text);
+}
+void test_timeout_flow_loop() {
+    expect_execution_error("flow F { timeout=0.02 debug=false } main { while true {} }", "TimeoutError: flow");
+}
+void test_timeout_flow_sleep() {
+    auto start = std::chrono::steady_clock::now();
+    expect_execution_error("flow F { timeout=0.02 debug=false } main { sleep(10) }", "TimeoutError: flow");
+    ASSERT_TRUE(std::chrono::steady_clock::now() - start < std::chrono::seconds(2));
+}
+void test_timeout_flow_post_delay() {
+    expect_execution_error("flow F { timeout=0.02 delay=10 debug=false } main { return 42 }", "TimeoutError: flow");
+}
+void test_timeout_agent_recovery() {
+    ASSERT_EQ(run(R"(
+        agent Slow { timeout=0.02 main { sleep(10) } }
+        main {
+            caught=false
+            try { Slow("x") } catch err {
+                if err.find("TimeoutError: agent Slow") != 0 { raise "wrong timeout" }
+                caught=true
+            }
+            if caught == false { raise "missing timeout" }
+            return 42
+        }
+    )").n, 42.0);
+}
+void test_timeout_agent_post_delay() {
+    expect_execution_error("agent Slow { timeout=0.02 delay=10 task T {} } main { Slow(42) }",
+                           "TimeoutError: agent Slow");
+}
+void test_timeout_direct_task_agent_budget() {
+    expect_execution_error("agent Slow { timeout=0.02 task T { delay=10 } } main { Slow->T(42) }",
+                           "TimeoutError: agent Slow");
+}
+void test_timeout_task_recovery() {
+    ASSERT_EQ(run(R"(
+        agent A { task Slow { timeout=0.02 delay=10 } task Fast {} }
+        main {
+            caught=false
+            try { A->Slow(1) } catch err {
+                if err.find("TimeoutError: task A.Slow") != 0 { raise "wrong task timeout" }
+                caught=true
+            }
+            if caught == false { raise "missing task timeout" }
+            return A->Fast(42)
+        }
+    )").n, 42.0);
+}
+void test_timeout_parent_cannot_be_extended() {
+    expect_execution_error(R"(
+        flow F { timeout=0.02 debug=false }
+        agent A { timeout=100 task T { timeout=100 delay=10 } }
+        main { try { A(1) } catch err { return 42 } }
+    )", "TimeoutError: flow");
+}
+void test_timeout_invalid_values() {
+    for (const std::string value : {"-1", "\"bad\"", "999999999999999999999"}) {
+        expect_execution_error("flow F { timeout=" + value + " } main {}", "timeout");
+        expect_execution_error("agent A { timeout=" + value + " task T {} } main { A(1) }", "timeout");
+        expect_execution_error("agent A { task T { timeout=" + value + " } } main { A(1) }", "timeout");
+    }
+}
+void test_timeout_zero_inherits() {
+    ASSERT_EQ(run("flow F { timeout=0 debug=false } agent A { timeout=0 task T { timeout=0 } } main { return A(42) }").n, 42.0);
+    expect_execution_error("flow F { timeout=0.02 } agent A { timeout=0 task T { timeout=0 delay=10 } } main { A(1) }", "TimeoutError: flow");
+}
+
+// Only this host API is used across threads; AST/env/provider state stays on the run thread.
+static void cancellation_case(bool during_run) {
+    const std::string source = during_run ? "main { sleep(0.2) return 42 }" : "main { return 42 }";
+    std::unique_ptr<AxonArena, decltype(&axon_arena_free)> arena(axon_arena_new(65536), &axon_arena_free);
+    Lexer lexer(source, "<cancel-test>");
+    Parser parser(lexer.tokenize(), arena.get());
+    AxonNode* program = parser.parse_program();
+    ASSERT_TRUE(!parser.has_errors());
+    Interpreter interpreter;
+    interpreter.telemetry = false;
+    std::thread canceller;
+    if (during_run) canceller = std::thread([&] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        interpreter.request_cancel();
+    });
+    else interpreter.request_cancel();
+    std::string error;
+    try { interpreter.run(program); }
+    catch (const std::exception& caught) { error = caught.what(); }
+    if (canceller.joinable()) canceller.join();
+    ASSERT_TRUE(error.find("CancelledError:") != std::string::npos);
+    interpreter.reset_cancel();
+    ASSERT_EQ(interpreter.run(program).n, 42.0);
+}
+void test_cancel_before_run_and_reset() { cancellation_case(false); }
+void test_cancel_sleep_and_reset() { cancellation_case(true); }
+
+class FailingProvider final : public IProviderAdapter {
+public:
+    int calls = 0;
+    bool delayed = false;
+    std::string provider_name() const override { return "ollama"; }
+    bool is_available() override { return true; }
+    LLMResponse complete(const LLMRequest& request) override {
+        ++calls;
+        if (delayed) { request.control->sleep(10); }
+        if (calls == 1) throw std::runtime_error("fixture disconnected");
+        return LLMResponse{"recovered", 1, 1, 0, "stop"};
+    }
+};
+void test_provider_error_recovery() {
+    auto provider = std::make_shared<FailingProvider>();
+    ASSERT_EQ(run_recorded(processor("task T { prompt=[\"generate\"] }") + R"(
+        main {
+            caught=false
+            try { Processor(1) } catch err {
+                if err.find("ProviderError:") != 0 { raise "wrong provider error" }
+                caught=true
+            }
+            if caught == false { raise "provider error was swallowed" }
+            if typeof(__last_llm_error__) != "string" { raise "missing last error" }
+            result=Processor(2)
+            if typeof(__last_llm_error__) != "null" { raise "stale last error" }
+            return result
+        }
+    )", provider).s, std::string("recovered"));
+    ASSERT_EQ(provider->calls, 2);
+}
+void test_provider_error_stops_tasks() {
+    auto provider = std::make_shared<FailingProvider>();
+    std::string error;
+    try { run_recorded(processor("task First { prompt=[\"first\"] } task Next { prompt=[\"next\"] }")
+                       + "main { Processor(1) }", provider); }
+    catch (const std::exception& caught) { error = caught.what(); }
+    ASSERT_TRUE(error.find("ProviderError:") != std::string::npos);
+    ASSERT_EQ(provider->calls, 1);
+}
+void test_provider_missing_is_error() {
+    expect_execution_error(processor("task T { prompt=[\"generate\"] }") + "main { Processor(1) }",
+                           "ProviderError: provider 'ollama' is not registered");
+}
+void test_provider_budget_reaches_adapter() {
+    auto provider = std::make_shared<FailingProvider>(); provider->delayed = true;
+    std::string error;
+    try { run_recorded("agent A { timeout=0.02 task T { prompt=[\"generate\"] } } main { A(1) }", provider); }
+    catch (const std::exception& caught) { error = caught.what(); }
+    ASSERT_TRUE(error.find("TimeoutError: agent A") != std::string::npos);
+    ASSERT_EQ(provider->calls, 1);
+}
+void test_graph_unhandled_provider_error() {
+    expect_execution_error("agent A { task T { prompt=[\"generate\"] } }", "ProviderError:");
+}
+
 int main() {
     std::cout << "═══════════════════════════════════════════\n";
     std::cout << "  Axon Interpreter Tests\n";
@@ -1096,6 +1253,24 @@ int main() {
 
     TEST(task_legacy_output_metadata_preserved);
     TEST(direct_task_output_format_identifier);
+    TEST(timeout_flow_loop);
+    TEST(timeout_flow_sleep);
+    TEST(timeout_flow_post_delay);
+    TEST(timeout_agent_recovery);
+    TEST(timeout_agent_post_delay);
+    TEST(timeout_direct_task_agent_budget);
+    TEST(timeout_task_recovery);
+    TEST(timeout_parent_cannot_be_extended);
+    TEST(timeout_invalid_values);
+    TEST(timeout_zero_inherits);
+    TEST(cancel_before_run_and_reset);
+    TEST(cancel_sleep_and_reset);
+    TEST(provider_error_recovery);
+    TEST(provider_error_stops_tasks);
+    TEST(provider_missing_is_error);
+    TEST(provider_budget_reaches_adapter);
+    TEST(graph_unhandled_provider_error);
+
 
     std::cout << "\n═══════════════════════════════════════════\n";
     std::cout << "  Results: \033[32m" << passed << " passed\033[0m, ";
