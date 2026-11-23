@@ -40,6 +40,7 @@ using Value = AxonValue;
 // Environment — lexical scope (chain of maps)
 // ─────────────────────────────────────────────────────────────
 class Env {
+    friend class Interpreter;
 public:
     explicit Env(std::shared_ptr<Env> parent = nullptr)
         : _parent(std::move(parent)) {}
@@ -159,6 +160,22 @@ public:
     bool telemetry = false;
 
 private:
+    struct TaskFrame;
+    struct SharedState {
+        MemoryStore memory;
+        std::unique_ptr<SemanticMemory> semantic;
+        std::recursive_timed_mutex native_mutex;
+    };
+    std::shared_ptr<SharedState> _shared = std::make_shared<SharedState>();
+    std::unique_lock<std::recursive_timed_mutex> native_lock();
+    Value exec_parallel(const std::vector<AxonNode*>& branches, EnvPtr env,
+                        bool pipeline_group = false, Value input = Value::null());
+    std::unique_ptr<Interpreter> fork_branch(EnvPtr env, EnvPtr& branch_env);
+    void import_branch_closures(const Interpreter& branch, const Value& value);
+    std::vector<std::unique_ptr<TaskFrame>> _owned_task_frames;
+    std::map<std::string, Value> _parallel_task_updates;
+    std::ostream* _stdout = &std::cout;
+    std::ostream* _stderr = &std::cerr;
     Value with_timeout(double seconds, const std::string& owner,
                        const std::function<Value()>& action);
     void sleep_checked(double seconds) { _execution->sleep(seconds); }
@@ -234,6 +251,7 @@ private:
     // ── State ────────────────────────────────────────────────
     std::unordered_map<std::string,
         std::shared_ptr<IProviderAdapter>>   _providers;
+    std::unordered_map<std::string, std::shared_ptr<std::timed_mutex>> _provider_locks;
     std::unordered_map<std::string, AgentDef> _agents;
     std::unique_ptr<GraphEngine>              _graph;
     // Output config (from flow output { })
@@ -264,8 +282,6 @@ private:
     std::unordered_map<std::string, Value>    _task_outputs;
 
     std::unique_ptr<RuntimeMemory>            _memory;
-    MemoryStore                               _mem_store;   // Phase 3A key-value
-    std::unique_ptr<SemanticMemory>           _sem_mem;     // Phase 3B HNSW
     bool                                      _debug_mode   = true;
     double                                    _flow_delay   = 0.0;
     double                                    _flow_timeout = 0.0;
@@ -274,8 +290,8 @@ private:
     std::vector<AxonArena*>                   _import_arenas;         // keep imported file arenas alive
     // Closure capture: func_id → captured EnvPtr
     std::unordered_map<size_t, EnvPtr>        _closure_envs;
-    size_t                                    _closure_id_counter = 0;
-    std::unique_ptr<SessionMemory>            _sessions;
+    std::shared_ptr<std::atomic<size_t>> _closure_id_counter = std::make_shared<std::atomic<size_t>>(0);
+    std::shared_ptr<SessionMemory>            _sessions;
     AxonNode*                                 _graph_node = nullptr;
     const AgentDef*                           _current_agent = nullptr;
     std::string                               _expected_output;  // from task output=

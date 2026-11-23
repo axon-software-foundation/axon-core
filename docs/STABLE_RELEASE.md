@@ -17,11 +17,13 @@ the release scope is ready; changing the suffix alone does not complete that wor
 2. **Execution failures and limits — implemented cooperatively.** Flow/agent/task timeouts,
    interruptible delays, host cancellation and Ollama socket budgets are covered by regressions.
    Provider failures now propagate instead of returning `null` or input passthrough. See
-   [EXECUTION_CONTROL.md](../../docs/EXECUTION_CONTROL.md) for limits, including non-preemptible native/interop
+   [EXECUTION_CONTROL.md](EXECUTION_CONTROL.md) for limits, including non-preemptible native/interop
    calls. Real Ollama failure/recovery acceptance remains a manual check on the candidate.
-3. **Concurrent execution.** Specify environment/memory sharing and result publication before wiring
-   language `parallel` blocks to the native scheduler. Remove fixed OCR temporary-file collisions
-   before exposing concurrent OCR calls. Preserve sequential/task/closure contracts.
+3. **Concurrent execution — implemented, acceptance pending.** Parallel blocks and pipeline groups
+   use native scheduler jobs, lexical/closure snapshots, source-order publication and sibling
+   cancellation. Existing native services and legacy adapters are synchronized; OCR/Python temporary
+   directories are unique. See [PARALLEL.md](PARALLEL.md). Real Ollama and platform CI acceptance
+   remain required before publication.
 4. **Public HTTP.** Specify a small public GET/POST/JSON contract; implement verified HTTPS,
    status/headers/body, explicit errors, deadlines and resource limits. Test real requests against
    a local fixture server, plus controlled TLS verification. The specialized Ollama client does not

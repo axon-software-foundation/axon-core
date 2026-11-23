@@ -241,7 +241,22 @@ main {
 }
 ```
 
-`parallel` blocks currently execute sequentially.
+`parallel` blocks execute independent assignments/expressions concurrently using lexical snapshots.
+Only their top-level assignment results and completed task outputs publish at a successful join,
+in source order. Shared memory is synchronized; side effects are not rolled back on failure.
+Pipeline groups retain their last-declared-result convention. See [PARALLEL.md](PARALLEL.md).
+
+<!-- axon-check: run -->
+```axon
+flow Demo { debug=false timeout=5 }
+func double_value(n) { sleep(0.01) return n*2 }
+main {
+    parallel { left=double_value(10) right=double_value(20) }
+    if left != 20 { raise "left result" }
+    if right != 40 { raise "right result" }
+}
+```
+
 
 The CLI registers the Ollama adapter when its local service is available. Additional provider
 names, transport declarations and endpoint metadata do not establish working adapters.

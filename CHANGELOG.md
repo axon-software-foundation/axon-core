@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Execute parallel blocks and pipeline groups using bounded native scheduler jobs, lexical/closure
+  snapshots, source-order result publication and cooperative sibling cancellation.
+- Preserve pipeline groups' last-declared-result convention; publish only top-level branch assignments.
+  Parallel code must use independent branches, not rely on prior sequential sibling side effects.
+- Synchronize existing native services and legacy provider adapters; Ollama opts into concurrent requests.
+  Use unique temporary directories for OCR/Python interop and buffer branch print output in source order.
+- Correct Python interop script indentation and avoid shadowing Python print with Axon's built-in marker;
+  escape multiline injected strings; retain the existing string result contract and add a manual interop acceptance example.
+- Add 21 interpreter concurrency cases, two scheduler cases, two CLI cases and parallel validation examples.
+
 - Enforce cooperative flow/agent/task timeouts, including inherited deadlines and post-delays;
   add host cancellation and interruptible sleep/Ollama socket operations.
 - Raise catchable provider failures instead of returning input passthrough or silent null. Preserve

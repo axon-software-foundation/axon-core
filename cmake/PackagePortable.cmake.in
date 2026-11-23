@@ -40,7 +40,7 @@ file(COPY "${source}/licenses" DESTINATION "${root}")
 file(COPY "${source}/docs/PORTABLE.md" "${source}/docs/RELEASE_NOTES.md"
     "${source}/docs/ROADMAP.md" "${source}/docs/HTTP_STATUS.md"
     "${source}/docs/LANGUAGE.md" "${source}/docs/MODULES.md"
-    "${source}/docs/EXECUTION_CONTROL.md" DESTINATION "${root}/docs")
+    "${source}/docs/EXECUTION_CONTROL.md" "${source}/docs/PARALLEL.md" DESTINATION "${root}/docs")
 file(COPY "${source}/examples/validation" DESTINATION "${root}/examples")
 file(COPY "${source}/examples/flows.axon" DESTINATION "${root}/examples")
 

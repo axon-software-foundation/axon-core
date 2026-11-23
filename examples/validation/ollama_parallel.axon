@@ -1,0 +1,24 @@
+# Requires a running Ollama service and the llama3.2 model.
+# Runtime requests overlap; actual generation scheduling depends on the server/hardware.
+flow Demo { debug=false timeout=180 }
+agent Processor {
+    provider ollama
+    model llama3.2
+    num_ctx=4096
+    timeout=80
+    task Answer { input=__input__ prompt=["Answer briefly."] }
+}
+main {
+    parallel {
+        fruit=Processor("Name one fruit and its color.")
+        country=Processor("Name one country and its capital.")
+    }
+    if typeof(fruit) != "string" { raise "fruit generation failed" }
+    if typeof(country) != "string" { raise "country generation failed" }
+    if fruit.isempty() { raise "fruit generation was empty" }
+    if country.isempty() { raise "country generation was empty" }
+    if Processor.Answer != country { raise "task cache did not merge in source order" }
+    print("Fruit: ",fruit)
+    print("Country: ",country)
+    print("PASS live Ollama parallel")
+}

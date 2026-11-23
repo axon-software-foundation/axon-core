@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <algorithm>
+#include <vector>
 
 namespace axon {
 
@@ -45,11 +46,20 @@ public:
     void check() const {
         if (_cancelled->load(std::memory_order_relaxed))
             throw ExecutionInterrupted("CancelledError: execution cancelled");
+        for (const auto& token : _groups)
+            if (token->load(std::memory_order_relaxed))
+                throw ExecutionInterrupted("CancelledError: parallel sibling failed");
         if (Clock::now() >= _deadline)
             throw ExecutionInterrupted("TimeoutError: " + _owner + " deadline exceeded");
     }
 
     bool has_deadline() const { return _deadline != Clock::time_point::max(); }
+
+    ExecutionControl linked_cancel(std::shared_ptr<std::atomic<bool>> token) const {
+        ExecutionControl result(*this);
+        result._groups.push_back(std::move(token));
+        return result;
+    }
 
     void sleep(double seconds) const {
         if (!std::isfinite(seconds) || seconds < 0)
@@ -67,6 +77,7 @@ public:
 
 private:
     std::shared_ptr<std::atomic<bool>> _cancelled;
+    std::vector<std::shared_ptr<std::atomic<bool>>> _groups;
     Clock::time_point _deadline = Clock::time_point::max();
     std::string _owner;
 };
