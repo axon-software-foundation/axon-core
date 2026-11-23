@@ -286,6 +286,7 @@ public:
         : _host(std::move(host)), _port(port) {}
 
     std::string provider_name() const override { return "ollama"; }
+    bool supports_concurrent_requests() const override { return true; }
 
     bool is_available() override {
         try {

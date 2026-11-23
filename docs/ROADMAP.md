@@ -15,9 +15,10 @@ Implemented with focused regressions: functions/closures, relative imports, CLI 
 three agent invocation forms, task input/output references, repeated-invocation isolation,
 basic task graphs and post-delays. Scheduler shutdown and strict-build portability fixes are included.
 Keep these contracts covered as the language evolves. Cooperative flow/agent/task deadlines, host
-cancellation and provider-error propagation are implemented; see [EXECUTION_CONTROL.md](../../docs/EXECUTION_CONTROL.md)
-for scope and external blocking-call limits. Pending: actual language-level parallel execution,
-complete graph policy semantics and consistent native-module arity/type errors.
+cancellation and provider-error propagation are implemented; see [EXECUTION_CONTROL.md](EXECUTION_CONTROL.md)
+for scope and external blocking-call limits. Language-level parallel blocks and pipeline groups now
+use native workers with isolated environments and synchronized services; see [PARALLEL.md](PARALLEL.md).
+Pending: complete graph policy semantics and consistent native-module arity/type errors.
 
 ## 2. Publish the first alpha
 

@@ -105,7 +105,7 @@ add_executable(axon
     cli/main.cpp
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
-    runtime/src/interpreter.cpp
+        ../runtime/src/interpreter.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -128,15 +128,15 @@ target_link_libraries(axon PRIVATE axon_core)
 target_include_directories(axon PRIVATE third_party/zlib "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # ── Test runner binary ────────────────────────────────────────
-add_executable(axon_test_runtime tests/test_runtime.cpp)
+add_executable(axon_test_runtime ../tests/test_runtime.cpp)
 target_link_libraries(axon_test_runtime PRIVATE axon_core)
 
 # ── Interpreter test binary ───────────────────────────────────
 add_executable(axon_test_interp
-    tests/test_interpreter.cpp
+        ../tests/test_interpreter.cpp
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
-    runtime/src/interpreter.cpp
+        ../runtime/src/interpreter.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -161,7 +161,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_unavailable function_arity imported_function_arity flow_timeout provider_missing)
+            task_contract http_unavailable function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"
@@ -169,7 +169,7 @@ if(BUILD_TESTING)
                 "-DTEST_CASE=${case_name}"
                 "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cli-cases"
                 "-DVALIDATION_DIR=${CMAKE_CURRENT_SOURCE_DIR}/examples/validation"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_cli.cmake")
+                -P "../tests/test_cli.cmake")
         set_tests_properties(cli.${case_name} PROPERTIES TIMEOUT 20)
     endforeach()
     set_tests_properties(runtime interpreter PROPERTIES TIMEOUT 30)
@@ -198,7 +198,7 @@ install(TARGETS axon axon_test_runtime axon_test_interp DESTINATION bin)
 install(DIRECTORY runtime/include/ runtime/interfaces/ DESTINATION include/axon)
 install(FILES LICENSE VERSION THIRD_PARTY_NOTICES.md DESTINATION share/axon)
 install(DIRECTORY licenses/ DESTINATION share/axon/licenses)
-install(FILES docs/LANGUAGE.md docs/MODULES.md docs/EXECUTION_CONTROL.md DESTINATION share/axon/docs)
+install(FILES docs/LANGUAGE.md docs/MODULES.md docs/EXECUTION_CONTROL.md docs/PARALLEL.md DESTINATION share/axon/docs)
 install(DIRECTORY examples/ DESTINATION share/axon/examples)
 # Portable packages use a curated payload and validate the extracted archive.
 include(cmake/Portable.cmake)

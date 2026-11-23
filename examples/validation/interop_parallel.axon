@@ -1,0 +1,19 @@
+# Requires python3 on Unix or python on Windows, available on PATH.
+# Existing interop results remain strings; native interop calls are serialized for safety.
+flow Demo { debug=false timeout=15 }
+func python_work(n) {
+    python {
+        if "\n" not in context:
+            raise RuntimeError("multiline context was lost")
+        __result__ = n * 2
+        print("Python result:", __result__)
+    }
+    return __result__
+}
+main {
+    context="first\nsecond"
+    parallel { left=python_work(10) right=python_work(20) }
+    if left != "20" { raise "left Python result was lost" }
+    if right != "40" { raise "right Python result was lost" }
+    print("PASS Python interop in parallel branches")
+}

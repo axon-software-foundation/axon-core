@@ -20,7 +20,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | SHA-256, MD5, codecs | Implemented; known vectors/roundtrips | SHA-1/SHA-512 explicitly unsupported |
 | Key-value memory | Implemented; selected checks | String values, explicit persistence; no automatic typed object storage |
 | Semantic memory/HNSW | Implemented, external-service integration needs expansion | Ollama embeddings, HNSW L2; not automatic RAG |
-| PDF/DOCX/XLSX/images/OCR | Implemented readers/integrations, experimental coverage | Needs fixture matrix; Tesseract external; fixed OCR temp names prevent safe concurrent calls |
+| PDF/DOCX/XLSX/images/OCR | Implemented readers/integrations, experimental coverage | Needs fixture matrix; Tesseract external; native integrations serialized across sibling interpreters; OCR temp output is unique |
 | Shell/Python interop | Implemented, platform/external dependencies | Host permissions; no isolation or complete CI interop coverage |
 | C++ graph engine, actor FSM, scheduler | Runtime tests | Does not prove language-level concurrency or distributed orchestration |
 | Windows x64 portable | Candidate packaging validated; second-machine manual check | New tag artifacts require their own acceptance |
@@ -30,7 +30,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | HTTP/REST | Not implemented | Explicit unavailable diagnostic; test checks absence, not requests |
 | MCP/gRPC/WebSockets/mesh | Pending public implementation/integration | Parser fields/interfaces are not operational transports |
 | Timeouts and host cancellation | Cooperative implementation and focused regressions | See `docs/EXECUTION_CONTROL.md`; native/interop blocking calls are not preempted |
-| Language parallelism | Pending | `parallel` remains sequential |
+| Language parallelism | Native scheduler integration with focused concurrency tests | Snapshots, source-order join, linked cancellation; `docs/PARALLEL.md` |
 | Additional providers, training, automatic RAG | Pending | See roadmap; no guarantees inferred from declarations |
 
 Current references: [language](docs/LANGUAGE.md), [modules](docs/MODULES.md),

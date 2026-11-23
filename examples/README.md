@@ -2,7 +2,7 @@
 
 Use `validation/` and `flows.axon` for release acceptance. Historical examples are retained for
 migration and are not all current executable language documentation. Canonical syntax is in
-[LANGUAGE.md](../docs/LANGUAGE.md); native APIs and integration limits are in [MODULES.md](../docs/MODULES.md).
+[LANGUAGE.md](../axon/docs/LANGUAGE.md); native APIs and integration limits are in [MODULES.md](../docs/MODULES.md).
 
 A syntax-only sweep of all 31 existing `.axon` files at baseline `7a1537f` passed 30 and failed
 `flows_v1.axon`. A passing parse does not prove runtime behavior, external integrations or graph policies.
@@ -26,3 +26,7 @@ a working implementation. Do not execute untrusted examples with sensitive files
 
 The executable Markdown examples are checked directly by `docs.examples` in CTest. New reference
 examples should include expected-value assertions and clearly declare any external dependencies.
+
+Parallel validation: `validation/parallel.axon` runs without providers;
+`validation/ollama_parallel.axon` requires real Ollama generation. See
+[parallel execution](../axon/docs/PARALLEL.md) for snapshot/join semantics.
