@@ -1,5 +1,5 @@
 # Linux-only build/test and runtime images. No registry publication in this file.
-FROM ubuntu:24.04 AS build-env
+FROM ubuntu:26.04 AS build-env
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential cmake ninja-build git ca-certificates libcurl4-openssl-dev libssl-dev python3 \
@@ -17,7 +17,7 @@ RUN bash scripts/check-release.sh \
 FROM scratch AS artifacts
 COPY --from=build /src/dist/ /
 
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:26.04 AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libstdc++6 ca-certificates libcurl4t64 \
     && rm -rf /var/lib/apt/lists/* \
