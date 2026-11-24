@@ -89,7 +89,7 @@ public:
     std::vector<Token> tokenize();
     // Called by parser to read raw interop block content
     // (call after consuming the opening '{')
-    Token read_raw_block();
+    Token read_raw_block(TK language=TK::KW_PYTHON);
     const std::vector<LexError>& errors() const { return _errors; }
     bool has_errors() const { return !_errors.empty(); }
 

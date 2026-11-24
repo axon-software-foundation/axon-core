@@ -100,7 +100,8 @@ if(WIN32)
     target_compile_definitions(axon_core INTERFACE WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/Http.cmake)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/Http.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/Sqlite.cmake")
 
 # ── axon CLI (the main executable) ───────────────────────────
 add_executable(axon
@@ -126,7 +127,7 @@ set(ZLIB_SRCS
 )
 
 target_sources(axon PRIVATE ${ZLIB_SRCS})
-target_link_libraries(axon PRIVATE axon_core axon_http)
+target_link_libraries(axon PRIVATE axon_core axon_http axon_sql)
 target_include_directories(axon PRIVATE third_party/zlib "${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # ── Test runner binary ────────────────────────────────────────
@@ -147,16 +148,20 @@ add_executable(axon_test_interp
     runtime/src/modules.cpp
 )
 target_sources(axon_test_interp PRIVATE ${ZLIB_SRCS})
-target_link_libraries(axon_test_interp PRIVATE axon_core axon_http)
+target_link_libraries(axon_test_interp PRIVATE axon_core axon_http axon_sql)
 target_include_directories(axon_test_interp PRIVATE third_party/zlib)
 
 # ── Automated tests: no Python, Ollama or network required ─────
 if(BUILD_TESTING)
+    add_executable(axon_test_sql tests/test_sql.cpp)
+    target_link_libraries(axon_test_sql PRIVATE axon_sql)
+    add_test(NAME sql.native COMMAND axon_test_sql)
+    set_tests_properties(sql.native PROPERTIES TIMEOUT 30)
     find_package(OpenSSL REQUIRED)
-    add_executable(axon_test_http ../tests/test_http.cpp runtime/src/document_io.cpp)
+    add_executable(axon_test_http tests/test_http.cpp runtime/src/document_io.cpp)
     target_link_libraries(axon_test_http PRIVATE axon_core axon_http OpenSSL::SSL OpenSSL::Crypto)
     target_compile_definitions(axon_test_http PRIVATE AXON_HTTP_TEST_TLS)
-    add_test(NAME http.transport COMMAND axon_test_http "../tests/fixtures/http")
+    add_test(NAME http.transport COMMAND axon_test_http "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/http")
     set_tests_properties(http.transport PROPERTIES TIMEOUT 30)
     add_test(NAME pdf.progress COMMAND ${CMAKE_COMMAND}
         "-DAXON_EXE=$<TARGET_FILE:axon>"
@@ -174,7 +179,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_invalid_url function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure)
+            task_contract http_invalid_url function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure sqlite)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"

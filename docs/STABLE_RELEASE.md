@@ -29,15 +29,20 @@ the release scope is ready; changing the suffix alone does not complete that wor
    HTTP/TLS fixtures cover success, trust/hostname failure and cancellation. Windows uses pinned
    minimal static curl with Schannel; Unix uses system libcurl. See [HTTP_STATUS.md](HTTP_STATUS.md).
    CI/package and maintainer HTTPS acceptance remain required before publication.
-5. **Remaining release blockers.** Address confirmed failures in the selected modules, document
+5. **Interop and native SQL.** Native SQLite is implemented in the working tree with explicit
+   connection lifecycle, parameter binding, typed results and per-connection concurrency controls.
+   Configuration can live in flows/main/functions. Validate the candidate on native platforms;
+   implement DuckDB next, then PostgreSQL as separate driver blocks. Python/shell typed values,
+   process failures and cancellation remain independent work. See [INTEROP.md](../../docs/INTEROP.md).
+6. **Remaining release blockers.** Address confirmed failures in the selected modules, document
    explicit support boundaries for document formats/memory/interop, and migrate examples advertised
    as runnable. Add fixtures where they expose a concrete unsupported edge or protect a fix.
-6. **Release acceptance.** Run strict CI for the declared platforms, build and extract the exact tagged
+7. **Release acceptance.** Run strict CI for the declared platforms, build and extract the exact tagged
    packages, run their self-tests and examples, and verify checksums and dependency/notice payloads.
    Confirm live Ollama generation and chained task input on the final candidate. Publish matching
    notes, supported-platform details and a compatibility policy, then update download links.
 
-Steps 2–5 are implementation priorities, not a claim that each must ship in the same release.
+Steps 2–6 are implementation priorities, not a claim that each must ship in the same release.
 A pending feature may be scheduled later if the release clearly excludes it and does not silently
 pretend to provide it. Agree the final supported scope before applying a stable version label.
 
@@ -46,7 +51,7 @@ pretend to provide it. Agree the final supported scope before applying a stable 
 MCP, gRPC, WebSockets, additional providers, richer multi-flow ownership, RAG/training and distributed
 mesh remain explicit roadmap work. MCP requires its own role, capabilities, transport and lifecycle
 contract; it is not an alternate name for REST or gRPC. The broader inventory remains in
-[ROADMAP.md](../axon/docs/ROADMAP.md) and [FEATURES.md](../axon/FEATURES.md).
+[ROADMAP.md](ROADMAP.md) and [FEATURES.md](../FEATURES.md).
 
 The website is maintained separately. Its release/download/reference pages should reflect actual
 Core releases. Issues and discussions should be created in the official GitHub repository;

@@ -30,9 +30,9 @@ The baseline's external-service detection can print an informational Ollama-unav
 ## What the checks establish
 
 - Runtime suite: 33 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 129 cases covering expressions, functions, task input/output and delays, among others.
+- Interpreter suite: 137 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 32 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 34 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
@@ -113,3 +113,12 @@ A syntax-only sweep of all 31 existing `.axon` examples passed 30; `examples/flo
 failed parsing because it retains placeholders/old declarations. See [examples/README.md](../examples/README.md).
 Historical examples outside the validation directory may require files/services or contain old syntax;
 they are not silently treated as validated release examples. Their migration is tracked in the roadmap.
+
+## Native SQLite block
+
+The working-tree SQL implementation adds sql.native (11 focused C++ cases), eight interpreter
+regressions, cli.sqlite and an executed MODULES.md example. Tests require no Python, database server
+or sqlite3 executable. They cover native bindings, transactions, cancellation, limits, persistence,
+read-only files, foreign keys, parallel composition and unfinished-branch transaction rollback.
+Linux Release passed 34/34 CTest checks; Debug native SQL acceptance and the pinned source fetch are
+also checked locally. Native Windows/macOS and clean-machine acceptance remain pending for this patch.

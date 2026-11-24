@@ -15,13 +15,14 @@
 
 #pragma once
 #include "ast.h"
+#include "sql_client.h"
 #include "memory_store.h"
 #include "semantic_memory.h"
-#include "../interfaces/interfaces.hpp"
-#include "../src/graph_engine.cpp"
-#include "../src/actor.cpp"
-#include "../src/scheduler.cpp"
-#include "../src/runtime_memory.cpp"
+#include "interfaces.hpp"
+#include "graph_engine.cpp"
+#include "actor.cpp"
+#include "scheduler.cpp"
+#include "runtime_memory.cpp"
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -163,6 +164,7 @@ private:
     struct TaskFrame;
     struct SharedState {
         MemoryStore memory;
+        SqlRuntime sql;
         std::unique_ptr<SemanticMemory> semantic;
         std::recursive_timed_mutex native_mutex;
     };

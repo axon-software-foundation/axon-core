@@ -6,6 +6,7 @@ the licenses of embedded components or toolchain runtime code.
 | Component | Source | License / distributed text |
 | --- | --- | --- |
 | libcurl, bundled Windows HTTP build | https://curl.se / https://github.com/curl/curl | curl license, licenses/curl.txt; pinned 8.23.0 archive below |
+| SQLite 3.54.1 core, static | https://www.sqlite.org | Public domain; licenses/sqlite.txt with source/hash provenance |
 | hnswlib headers | https://github.com/nmslib/hnswlib | Apache 2.0, licenses/hnswlib-Apache-2.0.txt |
 | zlib 1.3.2 sources | https://zlib.net | zlib notice, licenses/zlib.txt |
 | stb_image, stb_image_write, stb_image_resize2 | https://github.com/nothings/stb | Embedded dual license preserved in licenses/stb_*.txt (MIT option available) |
@@ -92,3 +93,10 @@ licenses remain applicable; this package does not bundle those shared libraries.
 also a build/test dependency for the controlled TLS fixture; that fixture executable and test
 private key are not part of portable runtime payloads. The optional bundled-curl Unix build uses
 system OpenSSL. Review exact dependencies and notices when changing this configuration.
+
+## SQLite native SQL
+
+The core is fetched from the official amalgamation archive recorded in licenses/sqlite.txt and
+cmake/Sqlite.cmake. It is statically linked, built threadsafe with math functions and without loadable
+extensions. No SQLite CLI, shell or external SQLite DLL is included. DuckDB/PostgreSQL are not
+linked or implemented drivers in this change.

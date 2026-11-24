@@ -33,3 +33,6 @@ Parallel validation: `validation/parallel.axon` runs without providers;
 
 `validation/http.axon` is manual HTTPS acceptance against the public repository API; it requires
 Internet access. Automated HTTP/TLS fixtures use loopback and are included in CTest.
+
+- `validation/sqlite.axon`: native SQLite connection configuration, bound parameters, transactions,
+  named lookup, functions, parallel reads and raw SQL. Requires no external database/Python/LLM.

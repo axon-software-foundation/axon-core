@@ -72,8 +72,11 @@ image inputs. Provider names in old examples are not implemented adapters.
 
 Expand memory/TTL/persistence, embeddings/HNSW, PDF, DOCX/XLSX, images and OCR integration fixtures.
 Document native PDF architecture rather than claiming MuPDF. Remove fixed OCR temporary-file collisions
-before concurrent use. Consolidate Python/shell behavior and design storage drivers based on priorities
-(PostgreSQL/MySQL/MongoDB/DuckDB/Arrow are proposals, not current drivers).
+before concurrent use. Consolidate Python/shell typed exchange, result/error reporting, subprocess lifecycle and cancellation.
+Native SQLite connections are implemented in the working tree; validate them across platforms/packages.
+The agreed next driver order is DuckDB, then PostgreSQL, preserving explicit connection configuration
+outside agent/task declarations (flow dictionaries, main and functions). MySQL/MongoDB/Arrow remain
+separate proposals. See INTEROP.md for the current connection and transaction contract.
 Specify remaining regex/error semantics and unsupported hashes without changing existing contracts silently.
 
 ## 8. RAG and learning

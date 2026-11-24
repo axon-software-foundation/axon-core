@@ -21,14 +21,14 @@
  * Axon AST tree-walking interpreter.
  */
 
-#include "../include/platform.h"
-#include "../include/interpreter.h"
-#include "../include/memory_store.h"
-#include "../include/document_io.h"
-#include "../include/modules.h"
-#include "../include/http_client.h"
-#include "../include/lexer.h"
-#include "../include/axon_parser.h"
+#include "platform.h"
+#include "interpreter.h"
+#include "memory_store.h"
+#include "document_io.h"
+#include "modules.h"
+#include "http_client.h"
+#include "lexer.h"
+#include "axon_parser.h"
 #include <sstream>
 #include <cmath>
 #include <algorithm>
@@ -320,6 +320,7 @@ Interpreter::Interpreter()
 }
 
 Interpreter::~Interpreter() {
+    _shared->sql.release_owner(reinterpret_cast<uintptr_t>(this));
     for (AxonArena* arena : _import_arenas) axon_arena_free(arena);
 }
 
@@ -1384,7 +1385,8 @@ Value Interpreter::exec_try(AxonNode* node, EnvPtr env) {
 }
 
 Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
-    auto native_guard = native_lock();
+    std::unique_lock<std::recursive_timed_mutex> native_guard;
+    if (node->as.interop_block.lang != AXON_INTEROP_SQL) native_guard = native_lock();
     std::string code = node->as.interop_block.code
                        ? node->as.interop_block.code : "";
 
@@ -1553,15 +1555,20 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
     }
 
     if (node->as.interop_block.lang == AXON_INTEROP_SQL) {
-        log(AXON_LOG_INFO, "sql: " + code.substr(0, 60) + "...");
-        // Phase 3: real SQL execution via native drivers
-        Value sql_result = Value::null();
-        env->set("__result__", sql_result);
-        env->set("sql.__result__", sql_result);
-        Value sql_obj; sql_obj.kind = Value::Kind::Dict;
-        sql_obj.dict["__result__"] = sql_result;
-        env->set("sql", sql_obj);
-        return sql_result;
+        Value connection = env->get("__sql_connection__");
+        if (connection.is_null()) throw RaiseSignal{"SqlError: select a connection with sql->use(db) before a sql block"};
+        Value results = eval_builtin_call("sql", "script", {connection, Value::from(code)}, env);
+        Value result = results.list.back().dict.at("rows");
+        Value object; object.kind = Value::Kind::Dict;
+        object.dict["result"] = result;
+        object.dict["__result__"] = result;
+        object.dict["results"] = results;
+        object.dict["connection"] = connection;
+        env->set("sql", object);
+        env->set("sql.result", result);
+        env->set("sql.__result__", result);
+        env->set("__result__", result);
+        return result;
     }
 
     return Value::null();
@@ -2544,7 +2551,7 @@ Value Interpreter::eval_task_call(AxonNode* node, EnvPtr env) {
     // Builtin modules: file, memory, storage, whisper
     static const std::vector<std::string> builtins = {
         "file", "memory", "storage", "whisper", "shell",
-        "csv", "json", "date", "pdf", "image", "codec", "hash", "ocr", "sleep", "print", "type", "http"
+        "csv", "json", "date", "pdf", "image", "codec", "hash", "ocr", "sleep", "print", "type", "http", "sql"
     };
     for (auto& b : builtins) {
         if (agent_name == b)
@@ -2630,6 +2637,23 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                                       const std::string&         fn,
                                       const std::vector<Value>&  args,
                                       EnvPtr                     env) {
+    if (mod == "sql" || (mod == "storage" && fn == "query")) {
+        try {
+            if (mod == "sql" && fn == "use") {
+                if (args.size() != 1) throw std::runtime_error("SqlError: use requires one connection");
+                Value open = _shared->sql.call("is_open", args, _execution, reinterpret_cast<uintptr_t>(this));
+                if (!open.b) throw std::runtime_error("SqlError: connection is closed");
+                env->set("__sql_connection__", args[0]);
+                return args[0];
+            }
+            return _shared->sql.call(fn, args, _execution, reinterpret_cast<uintptr_t>(this));
+        } catch (const ExecutionInterrupted& error) {
+            _execution->check();
+            throw RaiseSignal{error.what()};
+        } catch (const std::exception& error) {
+            throw RaiseSignal{error.what()};
+        }
+    }
     if (mod == "http") {
         try { return http_module_call(fn, args, _execution); }
         catch (const ExecutionInterrupted& error) {
@@ -3065,13 +3089,6 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
                 "memory->sem_load: FAILED — delete old .idx and re-index");
         }
         return Value::from(ok);
-    }
-
-    // ── storage->query(sql) — stub (Phase 4) ─────────────────
-    if (mod == "storage" && fn == "query") {
-        log(AXON_LOG_INFO, "storage->query() — Phase 4");
-        Value r; r.kind = Value::Kind::List;
-        return r;
     }
 
     // ── whisper->transcribe(path) — stub (Phase 4) ───────────

@@ -1,0 +1,40 @@
+# Native SQLite: no Python, sqlite3 executable, server or LLM required.
+flow Demo {
+    debug = false
+    timeout = 15
+    database = {"driver":"sqlite", "database":":memory:", "name":"math"}
+}
+func open_database(config) {
+    return sql->connect(config)
+}
+func total(db) {
+    return sql->query(db, "SELECT sum(value) AS answer FROM numbers")[0]["answer"]
+}
+main {
+    db = open_database(flow.database)
+    sql->execute(db, "CREATE TABLE numbers(value INTEGER NOT NULL)")
+    sql->begin(db)
+    try {
+        sql->execute(db, "INSERT INTO numbers VALUES (?)", [20])
+        sql->execute(db, "INSERT INTO numbers VALUES (:value)", {"value":22})
+        sql->commit(db)
+    } catch err {
+        sql->rollback(db)
+        raise err
+    }
+    parallel {
+        first = total(db)
+        second = total(sql->connection("math"))
+    }
+    if first != 42 || second != 42 { raise "SQL function/parallel result" }
+    sql->use(db)
+    sql {
+        -- A brace in a SQL comment is not the end of this block: }
+        SELECT '} literal' AS text, sum(value) AS answer FROM numbers;
+    }
+    if sql.result[0]["answer"] != 42 { raise "SQL block result" }
+    if sql.result[0]["text"] != "} literal" { raise "SQL literal was damaged" }
+    sql->close(db)
+    if sql->is_open(db) != false { raise "SQL connection was not closed" }
+    print("PASS SQLite connections, transactions, parameters and parallel")
+}
