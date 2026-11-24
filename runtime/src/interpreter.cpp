@@ -27,6 +27,7 @@
 #include "document_io.h"
 #include "modules.h"
 #include "http_client.h"
+#include "interop_process.h"
 #include "lexer.h"
 #include "axon_parser.h"
 #include <sstream>
@@ -382,6 +383,7 @@ std::unique_ptr<Interpreter> Interpreter::fork_branch(EnvPtr env, EnvPtr& branch
         return copied;
     };
     std::unordered_map<const Env*, EnvPtr> environments;
+    std::unordered_map<const Value*, std::shared_ptr<Value>> interop_contexts;
     std::function<EnvPtr(EnvPtr)> copy_env = [&](EnvPtr source) -> EnvPtr {
         if (!source) return nullptr;
         auto found = environments.find(source.get());
@@ -389,6 +391,9 @@ std::unique_ptr<Interpreter> Interpreter::fork_branch(EnvPtr env, EnvPtr& branch
         auto copied = make_env();
         environments[source.get()] = copied;
         copied->_parent = copy_env(source->_parent);
+        auto& context=interop_contexts[source->_interop.get()];
+        if(!context) context=std::make_shared<Value>(Value::null());
+        copied->_interop=context;
         for (const auto& item : source->_vars) copied->set(item.first, copy_value(item.second));
         return copied;
     };
@@ -545,6 +550,7 @@ Value Interpreter::with_timeout(double seconds, const std::string& owner,
 }
 
 Value Interpreter::run(AxonNode* program) {
+    _global_env->publish_interop(Value::null());
     if (!program || program->type != AXON_NODE_PROGRAM)
         throw std::runtime_error("interpreter: expected PROGRAM node");
 
@@ -775,6 +781,7 @@ void Interpreter::collect(AxonNode* prog, EnvPtr env) {
                 fn.dict["__node__"]       = Value::from((double)(uintptr_t)s);
                 fn.dict["__is_arrow__"]   = Value::from((bool)s->as.func_def.is_arrow);
                 fn.dict["__closure_id__"] = Value::from((double)cid3);
+                fn.dict["__source__"] = Value::from(_source_file);
                 std::string fname = s->as.func_def.name;
                 env->set(fname, fn);
                 log(AXON_LOG_DEBUG, "func registered: " + fname);
@@ -1265,6 +1272,7 @@ Value Interpreter::exec_stmt(AxonNode* node, EnvPtr env) {
             fn.dict["__node__"]     = Value::from((double)(uintptr_t)node);
             fn.dict["__is_arrow__"] = Value::from((bool)node->as.func_def.is_arrow);
             fn.dict["__closure_id__"] = Value::from((double)cid);
+            fn.dict["__source__"] = env->contains("__python_source__") ? env->get("__python_source__") : Value::from(_source_file);
             if (node->as.func_def.name) {
                 std::string fname = node->as.func_def.name;
                 env->set(fname, fn);
@@ -1408,176 +1416,41 @@ Value Interpreter::exec_try(AxonNode* node, EnvPtr env) {
 }
 
 Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
-    std::unique_lock<std::recursive_timed_mutex> native_guard;
-    if (node->as.interop_block.lang != AXON_INTEROP_SQL) native_guard = native_lock();
+    // Python and shell use independent child processes and must not hold the native lock.
     std::string code = node->as.interop_block.code
                        ? node->as.interop_block.code : "";
 
-    if (node->as.interop_block.lang == AXON_INTEROP_PYTHON) {
-        // Write temp Python file, inject Axon variables, run subprocess,
-        // capture __result__ via a sentinel prefix in stdout.
-        TemporaryDirectory temporary;
-        std::string tmp_path = (temporary.path / "script.py").string();
-        // Strip common leading whitespace from code (dedent)
-        std::string dedented;
-        {
-            std::istringstream ss(code);
-            std::string ln;
-            // Find minimum indent
-            size_t min_indent = std::string::npos;
-            std::vector<std::string> raw_lines;
-            while (std::getline(ss, ln)) {
-                raw_lines.push_back(ln);
-                if (ln.find_first_not_of(" 	") != std::string::npos) {
-                    size_t ind = ln.find_first_not_of(" 	");
-                    if (ind < min_indent) min_indent = ind;
+    if (node->as.interop_block.lang == AXON_INTEROP_PYTHON || node->as.interop_block.lang == AXON_INTEROP_SHELL) {
+        try {
+            Value result;
+            if (node->as.interop_block.lang == AXON_INTEROP_PYTHON) {
+                Value inputs; inputs.kind = Value::Kind::Dict;
+                for (size_t i=0; i<node->as.interop_block.inputs.count; ++i) {
+                    const auto& item=node->as.interop_block.inputs.items[i];
+                    inputs.dict[item.key]=eval(item.value,env);
                 }
+                env->publish_interop(Value::null());
+                const Value source=env->get("__python_source__");
+                result=run_python_block(code,inputs,source.kind==Value::Kind::String?source.s:_source_file,
+                    node->as.interop_block.code_line,*_execution,*_stdout,*_stderr);
+            } else {
+                env->publish_interop(Value::null());
+                result=run_shell_block(code,*_execution,*_stdout,*_stderr);
+                Value alias=result;
+                alias.dict["exitcode"]=result.dict.at("exit_code");
+                env->set("shell",alias);
+                env->set("shell.stdout",result.dict.at("stdout"));
+                env->set("shell.exitcode",result.dict.at("exit_code"));
             }
-            if (min_indent == std::string::npos) min_indent = 0;
-            for (auto& l : raw_lines) {
-                if (l.size() >= min_indent)
-                    dedented += l.substr(min_indent) + "\n";
-                else
-                    dedented += l + "\n";
-            }
-        }
-        std::string script;
-
-        // Inject Axon scope variables as Python globals
-        auto snap = env->snapshot();
-        for (auto& kv : snap) {
-            const std::string& k = kv.first;
-            if (k.empty() || k[0] == '_') continue;
-            std::string safe = k;
-            for (char& c : safe) if (c == '.') c = '_';
-            const Value& v = kv.second;
-            if (k == "print" && v.kind == Value::Kind::String && v.s == "__builtin_print__") continue;
-            if (v.kind == Value::Kind::String) {
-                // JSON string literals are valid Python string literals too;
-                // preserve newlines/control characters from document/OCR context.
-                script += safe + " = " + json_stringify(v, 0) + "\n";
-            } else if (v.kind == Value::Kind::Number) {
-                script += safe + " = " + to_string(v) + "\n";
-            } else if (v.kind == Value::Kind::Bool) {
-                script += safe + " = " + (v.b ? "True" : "False") + "\n";
-            }
-        }
-
-        script += "\n";
-        script += dedented;
-        script += "\n";
-        // Capture __result__ with a sentinel line
-        script += "import sys as _sys, json as _json\n";
-        script += "try:\n";
-        script += "    _r = __result__\n";
-        script += "    print('__COG__' + _json.dumps(_r))\n";
-        script += "except NameError:\n";
-        script += "    pass\n";
-
-        // Write file
-        {
-            FILE* f = fopen(tmp_path.c_str(), "w");
-            if (f) { fputs(script.c_str(), f); fclose(f); }
-        }
-
-        // Run subprocess
-#ifdef AXON_OS_WINDOWS
-        std::string py_cmd = "python \"" + tmp_path + "\" 2>nul";
-#else
-        std::string py_cmd = "python3 \"" + tmp_path + "\" 2>/dev/null";
-#endif
-#ifdef AXON_OS_WINDOWS
-        FILE* pipe = _popen(py_cmd.c_str(), "r");
-#else
-        FILE* pipe = popen(py_cmd.c_str(), "r");
-#endif
-        std::string output;
-        if (pipe) {
-            char buf[512];
-            while (fgets(buf, sizeof(buf), pipe)) output += buf;
-#ifdef AXON_OS_WINDOWS
-            _pclose(pipe);
-#else
-            pclose(pipe);
-#endif
-        }
-        remove(tmp_path.c_str());
-
-        // Parse output: print normal lines, extract __result__
-        Value py_result = Value::null();
-        {
-            std::istringstream iss(output);
-            std::string line;
-            while (std::getline(iss, line)) {
-                if (line.size() >= 7 &&
-                    line.substr(0, 7) == "__COG__") {
-                    std::string jv = line.substr(7);
-                    // Unwrap JSON string literal
-                    if (!jv.empty() && jv.front() == '"') {
-                        // strip outer quotes and unescape
-                        jv = jv.substr(1, jv.size() - 2);
-                        std::string unesc;
-                        for (size_t i = 0; i < jv.size(); ++i) {
-                            if (jv[i] == '\\' && i + 1 < jv.size()) {
-                                char nx = jv[++i];
-                                if (nx == 'n') unesc += '\n';
-                                else if (nx == 't') unesc += '\t';
-                                else if (nx == '"') unesc += '"';
-                                else if (nx == '\\') unesc += '\\';
-                                else { unesc += '\\'; unesc += nx; }
-                            } else { unesc += jv[i]; }
-                        }
-                        jv = unesc;
-                    }
-                    py_result = Value::from(jv);
-                    env->set("__result__", py_result);
-                    env->set("python.__result__", py_result);
-                    // Also set python as a dict so python.__result__ works via attr_access
-                    Value py_obj; py_obj.kind = Value::Kind::Dict;
-                    py_obj.dict["__result__"] = py_result;
-                    env->set("python", py_obj);
-                } else if (!line.empty()) {
-                    (*_stdout) << line << "\n";
-                }
-            }
-        }
-        return py_result;
-    }
-
-    if (node->as.interop_block.lang == AXON_INTEROP_SHELL) {
-        // Execute and capture stdout
-        std::string sh_out;
-        int rc = 0;
-#ifdef AXON_OS_WINDOWS
-        FILE* p = _popen((code + " 2>&1").c_str(), "r");
-#else
-        FILE* p = popen((code + " 2>&1").c_str(), "r");
-#endif
-        if (p) {
-            char buf[256];
-            while (fgets(buf, sizeof(buf), p)) sh_out += buf;
-#ifdef AXON_OS_WINDOWS
-            rc = _pclose(p);
-#else
-            rc = pclose(p);
-#endif
-        }
-        if (!sh_out.empty()) (*_stdout) << sh_out;
-        Value stdout_val = Value::from(sh_out);
-        Value rc_val     = Value::from((double)rc);
-        env->set("shell.stdout",   stdout_val);
-        env->set("shell.exitcode", rc_val);
-        env->set("__result__",     stdout_val);
-        // shell as dict: shell.stdout, shell.exitcode
-        Value sh_obj; sh_obj.kind = Value::Kind::Dict;
-        sh_obj.dict["stdout"]   = stdout_val;
-        sh_obj.dict["exitcode"] = rc_val;
-        sh_obj.dict["__result__"] = stdout_val;
-        env->set("shell", sh_obj);
-        return stdout_val;
+            env->publish_interop(result);
+            return result;
+        } catch (const ExecutionInterrupted&) { env->publish_interop(Value::null()); throw; }
+          catch (const RaiseSignal&) { env->publish_interop(Value::null()); throw; }
+          catch (const std::exception& error) { env->publish_interop(Value::null()); throw RaiseSignal{error.what()}; }
     }
 
     if (node->as.interop_block.lang == AXON_INTEROP_SQL) {
+        env->publish_interop(Value::null());
         Value connection = env->get("__sql_connection__");
         if (connection.is_null()) throw RaiseSignal{"SqlError: select a connection with sql->use(db) before a sql block"};
         Value results = eval_builtin_call("sql", "script", {connection, Value::from(code)}, env);
@@ -1590,7 +1463,7 @@ Value Interpreter::exec_interop(AxonNode* node, EnvPtr env) {
         env->set("sql", object);
         env->set("sql.result", result);
         env->set("sql.__result__", result);
-        env->set("__result__", result);
+        env->publish_interop(result);
         return result;
     }
 
@@ -1715,7 +1588,7 @@ Value Interpreter::eval(AxonNode* node, EnvPtr env) {
             std::string name = node->as.identifier.name;
             // Special built-ins
             if (name == "__input__")  return env->get("__input__");
-            if (name == "__result__") return env->get("__result__");
+            if (name == "__result__") return env->interop_result();
             Value v = env->get(name);
             if (v.is_null() && name != "null") {
                 // Check if this name was explicitly assigned in any scope
@@ -1982,6 +1855,10 @@ Value Interpreter::eval_attr(AxonNode* node, EnvPtr env) {
 Value Interpreter::eval_method(AxonNode* node, EnvPtr env) {
     Value      obj    = eval(node->as.method_call.obj, env);
     std::string method = node->as.method_call.method;
+    if (node->as.method_call.obj->type == AXON_NODE_IDENTIFIER &&
+        std::string(node->as.method_call.obj->as.identifier.name)=="__result__" &&
+        (method=="append" || method=="pop"))
+        throw RaiseSignal{"InteropError: __result__ is read-only; copy it before modifying"};
     // Evaluate args once for all method calls
     std::vector<Value> args;
     for (size_t i = 0; i < node->as.method_call.args.count; ++i)
@@ -2350,6 +2227,9 @@ Value Interpreter::eval_call(AxonNode* node, EnvPtr env) {
                     if (it_ce != _closure_envs.end()) base_env = it_ce->second;
                 }
                 EnvPtr fn_env = child_env(base_env);
+                fn_env->reset_interop();
+                auto python_source=callee.dict.find("__source__");
+                if(python_source!=callee.dict.end()) fn_env->set("__python_source__",python_source->second);
 
                 // Bind positional arguments to parameter names
                 for (size_t i = 0; i < fn_node->as.func_def.params.count; ++i) {
@@ -2686,7 +2566,8 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
             throw RaiseSignal{error.what()};
         }
     }
-    auto native_guard = native_lock();
+    std::unique_lock<std::recursive_timed_mutex> native_guard;
+    if(mod != "shell" || fn != "exec") native_guard = native_lock();
 
     // ── file->read(path, raw=false) ──────────────────────────
     if (mod == "file" && fn == "read") {
@@ -2889,34 +2770,18 @@ Value Interpreter::eval_builtin_call(const std::string&         mod,
 
     // ── shell->exec(cmd) — Phase 2D shell interop ────────────
     if (mod == "shell" && fn == "exec") {
-        if (args.empty()) return Value::null();
-        std::string cmd = to_string(args[0]);
-        std::string output;
-        int rc = 0;
-#ifdef AXON_OS_WINDOWS
-        FILE* p = _popen((cmd + " 2>&1").c_str(), "r");
-#else
-        FILE* p = popen((cmd + " 2>&1").c_str(), "r");
-#endif
-        if (p) {
-            char buf[256];
-            while (fgets(buf, sizeof(buf), p)) output += buf;
-#ifdef AXON_OS_WINDOWS
-            rc = _pclose(p);
-#else
-            rc = pclose(p);
-#endif
-        }
-        Value out_val = Value::from(output);
-        Value rc_val  = Value::from((double)rc);
-        env->set("shell.stdout",   out_val);
-        env->set("shell.exitcode", rc_val);
-        env->set("__result__",     out_val);
-        Value sh_obj; sh_obj.kind = Value::Kind::Dict;
-        sh_obj.dict["stdout"]   = out_val;
-        sh_obj.dict["exitcode"] = rc_val;
-        env->set("shell", sh_obj);
-        return out_val;
+        env->publish_interop(Value::null());
+        if(args.size()!=1 || args[0].kind!=Value::Kind::String)
+            throw RaiseSignal{"InteropError: shell->exec expects one command string"};
+        try {
+            std::ostringstream captured_stdout;
+            Value result=run_shell_block(args[0].s,*_execution,captured_stdout,*_stderr);
+            env->publish_interop(result);
+            Value alias=result;alias.dict["exitcode"]=result.dict.at("exit_code");env->set("shell",alias);
+            env->set("shell.stdout",result.dict.at("stdout"));env->set("shell.exitcode",result.dict.at("exit_code"));
+            return result.dict.at("stdout");
+        } catch(const ExecutionInterrupted&) {throw;}
+          catch(const std::exception& error) {throw RaiseSignal{error.what()};}
     }
 
     // ── memory->store(key, value, scope="runtime", ttl=0) ───────

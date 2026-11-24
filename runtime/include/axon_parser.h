@@ -114,6 +114,7 @@ private:
     // ── State ────────────────────────────────────────────────
     std::vector<Token>   _tokens;
     size_t               _pos = 0;
+    int _python_scope = 0;
     AxonArena*           _arena;
     std::vector<ParseError> _errors;
 };

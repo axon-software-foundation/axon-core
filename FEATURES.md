@@ -21,7 +21,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | Key-value memory | Implemented; selected checks | String values, explicit persistence; no automatic typed object storage |
 | Semantic memory/HNSW | Implemented, external-service integration needs expansion | Ollama embeddings, HNSW L2; not automatic RAG |
 | PDF/DOCX/XLSX/images/OCR | Implemented readers/integrations, experimental coverage | Needs fixture matrix; Tesseract external; native integrations serialized across sibling interpreters; OCR temp output is unique |
-| Shell/Python interop | Implemented, platform/external dependencies | Host permissions; no isolation or complete CI interop coverage |
+| Shell/Python interop | External processes; platform acceptance pending | Explicit Python inputs/typed returns, context-local result, deadlines; host permissions, not a sandbox |
 | C++ graph engine, actor FSM, scheduler | Runtime tests | Does not prove language-level concurrency or distributed orchestration |
 | Windows x64 portable | Candidate packaging validated; second-machine manual check | New tag artifacts require their own acceptance |
 | Linux native/Docker | CI validated on configured runner/image | No general distro/architecture compatibility guarantee or published image implied |
@@ -37,3 +37,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 
 Current references: [language](docs/LANGUAGE.md), [modules](docs/MODULES.md),
 [validation](docs/VALIDATION.md), [roadmap](docs/ROADMAP.md).
+
+- External Python: explicit `[name=value]` inputs, ordinary `return`, typed `__result__`, independent
+  subprocesses, controlled cancellation and shell result envelopes. See docs/PYTHON_INTEROP.md;
+  new-patch platform acceptance is pending. No embedded CPython or automatic package installation.

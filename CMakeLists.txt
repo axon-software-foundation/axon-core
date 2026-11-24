@@ -109,6 +109,7 @@ add_executable(axon
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
         runtime/src/interpreter.cpp
+    runtime/src/interop_process.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -140,6 +141,7 @@ add_executable(axon_test_interp
     runtime/src/lexer.cpp
     runtime/src/axon_parser.cpp
         runtime/src/interpreter.cpp
+    runtime/src/interop_process.cpp
     runtime/src/memory_store.cpp
     runtime/src/semantic_memory.cpp
     runtime/src/document_io.cpp
@@ -151,8 +153,28 @@ target_sources(axon_test_interp PRIVATE ${ZLIB_SRCS})
 target_link_libraries(axon_test_interp PRIVATE axon_core axon_http axon_sql)
 target_include_directories(axon_test_interp PRIVATE third_party/zlib)
 
-# ── Automated tests: no Python, Ollama or network required ─────
+# ── Automated tests: external Python, no Ollama or public network ─────
 if(BUILD_TESTING)
+    find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
+    add_executable(axon_test_python ../tests/test_python.cpp runtime/src/interop_process.cpp runtime/src/document_io.cpp)
+    target_include_directories(axon_test_python PRIVATE runtime/include runtime/interfaces)
+    target_link_libraries(axon_test_python PRIVATE axon_core)
+    add_test(NAME python.syntax_errors COMMAND ${CMAKE_COMMAND}
+        "-DAXON_EXE=$<TARGET_FILE:axon>" "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/python syntax cases"
+        -P "../tests/test_python_errors.cmake")
+    set_tests_properties(python.syntax_errors PROPERTIES TIMEOUT 30)
+    add_test(NAME python.deadline COMMAND ${CMAKE_COMMAND} -E env "AXON_PYTHON=${Python3_EXECUTABLE}"
+        ${CMAKE_COMMAND} "-DAXON_EXE=$<TARGET_FILE:axon>" "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+        -P "../tests/test_python_timeout.cmake")
+    set_tests_properties(python.deadline PROPERTIES TIMEOUT 15)
+    add_test(NAME python.process COMMAND axon_test_python)
+    set_tests_properties(python.process PROPERTIES ENVIRONMENT "AXON_PYTHON=${Python3_EXECUTABLE}" TIMEOUT 45)
+    foreach(python_example python_interop interop_parallel)
+        add_test(NAME python.${python_example} COMMAND ${CMAKE_COMMAND} -E env "AXON_PYTHON=${Python3_EXECUTABLE}"
+            $<TARGET_FILE:axon> run "${CMAKE_CURRENT_SOURCE_DIR}/examples/validation/${python_example}.axon")
+        set_tests_properties(python.${python_example} PROPERTIES TIMEOUT 45)
+    endforeach()
     add_executable(axon_test_sql tests/test_sql.cpp)
     target_link_libraries(axon_test_sql PRIVATE axon_sql)
     add_test(NAME sql.native COMMAND axon_test_sql)
@@ -165,7 +187,7 @@ if(BUILD_TESTING)
                 "-DTEST_CASE=${case_name}"
                 "-DVALIDATION_DIR=${CMAKE_CURRENT_SOURCE_DIR}/examples/validation"
                 "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/flow-database-cases"
-                -P "../tests/test_flow_database.cmake")
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_flow_database.cmake")
         set_tests_properties(flow.database.${case_name} PROPERTIES TIMEOUT 25)
     endforeach()
     find_package(OpenSSL REQUIRED)

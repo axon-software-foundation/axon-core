@@ -1,0 +1,2 @@
+# Expected syntax error: duplicate input
+main { python [x=1,x=2] { return x } }

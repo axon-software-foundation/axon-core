@@ -2,7 +2,7 @@
 
 Use `validation/` and `flows.axon` for release acceptance. Historical examples are retained for
 migration and are not all current executable language documentation. Canonical syntax is in
-[LANGUAGE.md](../axon/docs/LANGUAGE.md); native APIs and integration limits are in [MODULES.md](../docs/MODULES.md).
+[LANGUAGE.md](../docs/LANGUAGE.md); native APIs and integration limits are in [MODULES.md](../docs/MODULES.md).
 
 A syntax-only sweep of all 31 existing `.axon` files at baseline `7a1537f` passed 30 and failed
 `flows_v1.axon`. A passing parse does not prove runtime behavior, external integrations or graph policies.
@@ -29,7 +29,7 @@ examples should include expected-value assertions and clearly declare any extern
 
 Parallel validation: `validation/parallel.axon` runs without providers;
 `validation/ollama_parallel.axon` requires real Ollama generation. See
-[parallel execution](../axon/docs/PARALLEL.md) for snapshot/join semantics.
+[parallel execution](../docs/PARALLEL.md) for snapshot/join semantics.
 
 `validation/http.axon` is manual HTTPS acceptance against the public repository API; it requires
 Internet access. Automated HTTP/TLS fixtures use loopback and are included in CTest.
@@ -43,3 +43,15 @@ Internet access. Automated HTTP/TLS fixtures use loopback and are included in CT
   file for inspection. It now uses the same flow database registry shape.
 - `validation/flow_database_errors/*.axon`: intentional failures, not successful examples. Each file
   states its expected check/run phase and diagnostic. CTest verifies their expected exit status 1.
+
+### External Python acceptance
+
+- validation/python_interop.axon: complete standard-library-only contract, seven PASS groups.
+- validation/interop_parallel.axon: independent process/function branches.
+- validation/python_errors/: nine expected syntax failures plus flow_timeout.axon (expected runtime timeout); CTest asserts them.
+- validation/python_ml.axon plus python_helpers/ml_training.py: optional scikit-learn example.
+- python_helpers/worker.axon and transform.py exercise imports relative to an imported Axon function.
+
+Use Python 3.9+ and optionally set AXON_PYTHON to a virtual-environment executable. Historical
+showcases with implicit Python inputs or Python __result__ assignments need migration; see
+[PYTHON_INTEROP.md](../docs/PYTHON_INTEROP.md). Python caches/builds are not source deliverables.

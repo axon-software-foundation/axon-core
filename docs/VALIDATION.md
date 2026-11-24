@@ -1,6 +1,6 @@
 # Validation and evidence
 
-Documentation baseline: public `main` commit `7a1537f57cb52fb022a8bccb839f527cbc971901`,
+External-interop source baseline: public `main` commit `827e959bd7d4fbcb72a66c583618f95af6f4c46a`,
 version `0.4.0-alpha.1`. This document describes the current repository workflow, not a sequence
 of patches to copy over an old ZIP.
 
@@ -24,7 +24,8 @@ bash scripts/validate.sh Release -G Ninja \
 CMake 3.20+, CTest, a C++17 compiler and the selected build tool must be installed.
 Use a new `AXON_BUILD_DIR` when changing generator/compiler. The script configures/builds,
 runs CTest and both suites through `axon test`, then executes functions, imports, tasks and
-delays examples. It stops on failure. No model, Python, OCR tool or network service is required.
+delays examples. It stops on failure. Python 3.9+ is required for the complete test suite; no model,
+OCR tool or public network service is required.
 The baseline's external-service detection can print an informational Ollama-unavailable message.
 
 ## What the checks establish
@@ -32,7 +33,7 @@ The baseline's external-service detection can print an informational Ollama-unav
 - Runtime suite: 33 cases covering graph traversal, actor state, scheduler and runtime/session memory.
 - Interpreter suite: 141 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 48 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 53 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
@@ -114,10 +115,10 @@ failed parsing because it retains placeholders/old declarations. See [examples/R
 Historical examples outside the validation directory may require files/services or contain old syntax;
 they are not silently treated as validated release examples. Their migration is tracked in the roadmap.
 
-## Native SQLite block
+## Initial native SQLite acceptance (historical)
 
 The working-tree SQL implementation adds sql.native (11 focused C++ cases), eight interpreter
-regressions, cli.sqlite and an executed MODULES.md example. Tests require no Python, database server
+regressions, cli.sqlite and an executed MODULES.md example. These SQL runtime cases require no Python, database server
 or sqlite3 executable. They cover native bindings, transactions, cancellation, limits, persistence,
 read-only files, foreign keys, parallel composition and unfinished-branch transaction rollback.
 Linux Release passed 34/34 CTest checks; Debug native SQL acceptance and the pinned source fetch are
@@ -132,3 +133,15 @@ phases, controlled diagnostics and that main never executes for an invalid decla
 cover ordinary database variables/parameters, active/default/named flow registries, lazy configurations,
 validation without opening, main/functions/parallel, recipe reuse, transactions and lifecycle.
 The positive SQLite/Markdown examples are migrated to the same registry shape.
+
+## External Python/shell process acceptance
+
+The working tree adds five CTest entries (53 total): python.process, python.python_interop,
+python.interop_parallel, python.deadline and python.syntax_errors. The process executable has 12 focused cases;
+syntax acceptance checks nine expected-failure Axon files. The full positive example has seven
+PASS groups covering inputs/outputs, errors, source-relative imports, classes/functions, context
+isolation, parallel and shell handoff. The 141 pre-existing interpreter cases remain unchanged.
+Python 3.9+ is required for BUILD_TESTING; scikit-learn/pandas are not automated-test dependencies.
+The optional python_ml.axon example requires scikit-learn and is separate from CTest; local execution
+passed with scikit-learn 1.8.0. Strict Linux Release passed 53/53 CTest. New-patch
+native Windows/macOS acceptance remains pending. See PYTHON_INTEROP.md for the exact contract.

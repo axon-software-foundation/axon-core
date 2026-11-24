@@ -158,8 +158,8 @@ boundaries are not certified by the example. Inspect the implementation before r
 | --- | --- | --- |
 | Images (stb) | `image->info(source)`, `save(path, base64, format)`, `resize(source, width, height)`, `convert(source, format)` | Image inputs may be paths/base64 depending on operation. Codec/format/error coverage remains incomplete |
 | OCR (Tesseract) | `ocr->installed()`, `languages()`, `read(path, language="eng")` | Tesseract and language data are external. Local Linux success/failure checks passed; no complete CI OCR integration matrix |
-| Shell | `shell { ... }`, `shell->exec(command)`, `shell.stdout`, `shell.exitcode` | Executes commands with host permissions; shell syntax and exit handling are platform-dependent |
-| Python | `python { ... }` | External interpreter integration exists; not required or fully validated by the baseline. Not a native Python package manager |
+| Shell | `shell { ... }`, `shell->exec(command)`, `shell.stdout`, `shell.exitcode` | Independent cancellable process; structured __result__ with stdout/stderr/exit_code; host shell dialect |
+| Python | `python { ... }` | Explicit [name=value] inputs, return, typed __result__; fresh external Python process; see PYTHON_INTEROP.md |
 | SQL / SQLite | `sql->connect/query/execute/script`, transaction/lifecycle calls | Native explicit connections; see INTEROP.md |
 | Storage alias | `storage->query(db, statement, params, options)` | SQL query alias; no implicit connection or additional drivers |
 | Whisper | `whisper->transcribe(...)` | Stub returning an empty string; no working transcription integration |

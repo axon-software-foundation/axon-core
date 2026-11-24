@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Replace legacy Python scalar injection/string results with explicit multiline bindings, ordinary
+  Python return and typed context-local read-only __result__; normalize tuples to lists.
+- Run independent external Python/shell processes with inherited deadlines, cancellation,
+  separate output/result channels, resource checks and actionable errors.
+- Add Python contract/migration documentation, standard-library acceptance fixtures, optional
+  scikit-learn module example, and portable extraction checks with an external interpreter.
+- Resolve the flow-database CTest script from CMAKE_CURRENT_SOURCE_DIR instead of ../tests.
+
+
 - Reserve flow.database contextually as a validated alias-to-configuration registry, with explicit driver
   and database fields; keep database available as an ordinary variable/function parameter elsewhere.
 - Reject duplicate literal declarations/aliases/options; report runtime schema errors with flow/alias

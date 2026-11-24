@@ -1,0 +1,15 @@
+# Optional acceptance: install scikit-learn in the interpreter selected by AXON_PYTHON.
+# No downloads, credentials, GPU, server or model-file writes.
+flow MLExample { debug=false timeout=120 }
+main {
+    python [seed=42] {
+        from python_helpers.ml_training import train_model
+        return train_model(seed)
+    }
+    metrics = __result__
+    if metrics["accuracy"] < 0.8 { raise "unexpected classifier accuracy" }
+    if metrics["predictions"].size() != metrics["samples"] { raise "prediction conversion failed" }
+    print("Accuracy: ",metrics["accuracy"])
+    print("Samples: ",metrics["samples"])
+    print("PASS optional scikit-learn interop")
+}

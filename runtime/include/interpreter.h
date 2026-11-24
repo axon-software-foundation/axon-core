@@ -44,7 +44,7 @@ class Env {
     friend class Interpreter;
 public:
     explicit Env(std::shared_ptr<Env> parent = nullptr)
-        : _parent(std::move(parent)) {}
+        : _interop(parent ? parent->_interop : std::make_shared<Value>(Value::null())), _parent(std::move(parent)) {}
 
     void set(const std::string& k, Value v) {
         _vars[k] = std::move(v);
@@ -67,6 +67,10 @@ public:
         return _parent ? _parent->has(k) : false;
     }
 
+    Value interop_result() const { return *_interop; }
+    void publish_interop(Value value) { *_interop = std::move(value); }
+    void reset_interop() { _interop = std::make_shared<Value>(Value::null()); }
+
     // Assign to existing binding (walk up the chain)
     void assign(const std::string& k, Value v) {
         if (_vars.count(k)) { _vars[k] = std::move(v); return; }
@@ -88,6 +92,7 @@ public:
     }
 
 private:
+    std::shared_ptr<Value> _interop;
     std::unordered_map<std::string, Value> _vars;
     std::shared_ptr<Env>                   _parent;
 

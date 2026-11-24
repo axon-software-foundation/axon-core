@@ -1,0 +1,2 @@
+# Expected syntax error: not allowed directly
+agent A { task Bad { python { return 1 } } } main {}
