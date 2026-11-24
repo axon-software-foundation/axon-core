@@ -1,7 +1,7 @@
 # Native modules — 0.4.0-alpha.1
 
 Native calls use `module->function(...)` without imports. The dispatcher is in
-[runtime/src/interpreter.cpp](../../runtime/src/interpreter.cpp); image, codec and hash operations
+[runtime/src/interpreter.cpp](../runtime/src/interpreter.cpp); image, codec and hash operations
 are delegated to [modules.cpp](../runtime/src/modules.cpp). Implementation and validation are
 separate: the examples below assert selected behavior, not complete conformance of each API.
 
@@ -197,15 +197,15 @@ main {
 ## Native SQL / SQLite
 
 Connections can be configured in flow dictionaries, opened in main/functions, passed to agents/tasks,
-and looked up by name in the same interpreter family. See [INTEROP.md](../../docs/INTEROP.md) for SQL types,
+and looked up by name in the same interpreter family. See [INTEROP.md](INTEROP.md) for SQL types,
 transaction ownership, parameters, limits, cancellation, build provenance and pending drivers.
 
 <!-- axon-check: run -->
 ```axon
-flow Data { debug=false database={"driver":"sqlite","database":":memory:"} }
+flow Data { debug=false database={"primary":{"driver":"sqlite","database":":memory:"}} }
 func open_database(config) { return sql->connect(config) }
 main {
-    db=open_database(Data.database)
+    db=open_database(Data.database["primary"])
     sql->execute(db,"CREATE TABLE numbers(value INTEGER)")
     sql->begin(db)
     sql->execute(db,"INSERT INTO numbers VALUES (?)",[42])

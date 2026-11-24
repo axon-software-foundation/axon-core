@@ -8,9 +8,11 @@ flow DataChecks {
     debug = false
     timeout = 30
     database = {
-        "driver": "sqlite",
-        "database": ":memory:",
-        "name": "primary"
+        "primary": {
+            "driver": "sqlite",
+            "database": ":memory:",
+            "name": "primary"
+        }
     }
 }
 
@@ -34,7 +36,7 @@ func inventory_value(db) {
 
 main {
     # 1. Esquema, parámetros posicionales/nombrados y commit.
-    database = sql->connect(DataChecks.database)
+    database = sql->connect(DataChecks.database["primary"])
 
     sql->script(database, "
         CREATE TABLE products(

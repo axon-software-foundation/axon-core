@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon run.
+# Diagnostic: FlowDatabaseError: ... must be a dictionary of alias -> configuration
+flow Invalid { database=42 }
+main { print("SHOULD_NOT_RUN") }

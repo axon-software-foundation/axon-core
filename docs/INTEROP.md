@@ -16,11 +16,11 @@ inside executable code so it runs under the flow's execution budget.
 ```axon
 flow Data {
     debug=false
-    database={"driver":"sqlite","database":":memory:","name":"primary"}
+    database={"primary":{"driver":"sqlite","database":":memory:","name":"primary"}}
 }
 func open_database(config) { return sql->connect(config) }
 main {
-    db=open_database(Data.database)
+    db=open_database(Data.database["primary"])
     rows=sql->query(db,"SELECT ? AS answer",[42])
     print(rows[0]["answer"])
     sql->close(db)
@@ -52,10 +52,59 @@ an independent connection. Another SqlRuntime cannot use the handle. Closing rem
 later connection may reuse that name. At most 1024 open connections are retained by a runtime registry;
 closed handles do not consume registry entries.
 
+## Contextual flow.database registry
+
+Inside a flow, `database` is a contextual reserved property: its value must be a dictionary mapping
+non-empty aliases to connection-configuration dictionaries. Every flow configuration must explicitly
+contain `driver` and `database`; currently only the sqlite driver is supported. The ordinary connection
+options above are checked by the same pure schema validator used by connect. Unknown options, invalid
+types/paths and unsupported drivers raise FlowDatabaseError with the flow/alias context before main runs.
+This is schema validation, not a connectivity, permission or credential test.
+
+One database property is allowed per flow, with any number of aliases, including an empty registry.
+Flows without a declaration expose an empty dictionary; the active flow does not inherit a previous
+flow's database registry. Named flows retain independent registries even when they use equal aliases.
+`FlowName.database["alias"]` selects configuration; `flow.database` refers to the current active flow's
+registry under the existing flow-selection semantics. This change does not implement full multi-flow
+invocation/ownership. A missing dictionary key returns null under existing Axon lookup semantics;
+passing it to connect raises an error instead of silently choosing a default database.
+
+Literal duplicate database declarations, alias keys and configuration keys are parser errors, so
+`axon check` rejects them. Other configuration type/value checks run during declaration evaluation in
+`axon run`; `check` is still a syntax checker, not a complete semantic/type checker. For configurations
+built dynamically, ordinary dictionary construction semantics apply before the resulting values are
+validated. Expressions in declarations still follow normal Axon evaluation; the runtime itself never
+automatically opens their configuration recipes or reserves their names.
+
+Outside a flow declaration, database remains an ordinary identifier, function parameter or dictionary
+field. It is not added as a globally reserved lexer keyword. Creating a configuration inside main or a
+function remains valid; direct sql->connect calls retain their previous defaults, including an empty
+configuration selecting a private in-memory SQLite database.
+
+Aliases are recipes, not live connection names or singleton handles. Reusing an unnamed recipe can open
+independent connections, including from parallel branches. A configuration's optional name still belongs
+to the runtime's live connection registry and must be unique while open; flow aliases do not add an
+implicit namespace to it. Closing a handle does not remove its configuration. Opening an in-memory
+configuration again creates a fresh database.
+
+`sql->validate(config)` returns true for a valid direct connection configuration and raises a catchable
+SqlError otherwise, without opening a database, reserving a name or checking filesystem availability.
+It shares the exact option validation used by connect. Validation does not accept connection handles as
+configuration and does not activate pending drivers.
+
+### Migration from the first SQLite patch
+
+The earlier flat `flow F { database={"driver":"sqlite","database":":memory:"} }` shape is rejected.
+Wrap it as `flow F { database={"primary":{"driver":"sqlite","database":":memory:"}} }`, then open
+`F.database["primary"]`. Direct calls such as `sql->connect({"driver":"sqlite","database":":memory:"})`
+are unchanged. The SQLite examples, the maintainer's extended sqlite_test.axon and checked Markdown
+examples are migrated together.
+
 ## SQL operations
 
 | Call | Result / behavior |
 | --- | --- |
+| `sql->validate(config)` | Pure configuration validation; true or catchable SqlError |
 | `sql->connect(config)` | Open and return a connection handle |
 | `sql->connection(name)` | Look up an open named connection |
 | `sql->is_open(db)` | Boolean for a handle from this runtime |

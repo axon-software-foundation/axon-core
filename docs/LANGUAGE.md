@@ -270,3 +270,12 @@ CI does not verify GPU placement, VRAM usage or every option. The executable doe
 This alpha is not a stable language specification. [FEATURES.md](../FEATURES.md) maps capabilities
 to evidence; [ROADMAP.md](ROADMAP.md) records pending work. Historical RFC numbering and the
 Tree-sitter grammar are design/editor inputs, not a substitute for interpreter execution tests.
+
+## Contextual database declarations
+
+`database` inside a flow is reserved for a validated alias-to-configuration registry. Each alias must
+contain explicit driver/database fields; currently sqlite is the implemented driver. It is an ordinary
+identifier in main/functions. Opening resources remains explicit through sql->connect; see
+[INTEROP.md](INTEROP.md) for schema rules, dynamic validation and migration from the first flat shape.
+Literal duplicate declarations/aliases/options are check-time errors; other configuration values are
+validated when run evaluates the declaration. This is not global keyword reservation or implicit DB I/O.

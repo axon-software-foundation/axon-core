@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon run.
+# Diagnostic: FlowDatabaseError: ... requires explicit driver and database
+flow Invalid { database={"primary":{"driver":"sqlite"}} }
+main { print("SHOULD_NOT_RUN") }

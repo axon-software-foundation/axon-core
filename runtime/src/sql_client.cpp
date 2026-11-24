@@ -27,6 +27,28 @@ Value integer(sqlite3_int64 value) {
     constexpr sqlite3_int64 exact=9007199254740991LL;
     return value>exact||value<-exact?Value::from(std::to_string(value)):Value::from(static_cast<double>(value));
 }
+struct Config {
+    std::string database=":memory:",label;
+    bool readonly=false,create=true,foreign_keys=true;
+    double busy_timeout=5;
+};
+Config configuration(const Value& config) {
+    if(config.kind!=Value::Kind::Dict) fail("configuration must be a dictionary");
+    Config out;
+    for(const auto& item:config.dict) {
+        if(item.first=="driver") {if(text(item.second,"driver")!="sqlite") fail("driver is not implemented; supported driver: sqlite");}
+        else if(item.first=="database") out.database=text(item.second,"database");
+        else if(item.first=="name") out.label=text(item.second,"name");
+        else if(item.first=="busy_timeout") out.busy_timeout=positive(item.second,"busy_timeout",3600);
+        else if(item.first=="readonly"||item.first=="create"||item.first=="foreign_keys") {
+            if(item.second.kind!=Value::Kind::Bool) fail(item.first+" must be bool");
+            if(item.first=="readonly") out.readonly=item.second.b;else if(item.first=="create") out.create=item.second.b;else out.foreign_keys=item.second.b;
+        } else fail("unknown connection option "+item.first);
+    }
+    if(out.database.empty()||out.database.rfind("file:",0)==0) fail("database must be a path or :memory:; SQLite URI mode is not enabled");
+    return out;
+}
+
 struct Connection {
     std::timed_mutex mutex;
     sqlite3* db=nullptr;
@@ -199,24 +221,24 @@ struct SqlRuntime::Impl {
 };
 SqlRuntime::SqlRuntime():impl(std::make_unique<Impl>()) {}
 SqlRuntime::~SqlRuntime()=default;
+void SqlRuntime::validate_config(const Value& config,bool explicit_fields) {
+    if(explicit_fields&&(config.kind!=Value::Kind::Dict||!config.dict.count("driver")||!config.dict.count("database")))
+        fail("flow configuration requires explicit driver and database fields");
+    (void)configuration(config);
+}
 Value SqlRuntime::call(const std::string& name,const std::vector<Value>& args,
                        std::shared_ptr<const ExecutionControl> inherited,uintptr_t owner) {
     ExecutionControl parent=inherited?*inherited:ExecutionControl();parent.check();
+    if(name=="validate") {
+        if(args.size()!=1) fail("validate requires one configuration dictionary");
+        validate_config(args[0]);return Value::from(true);
+    }
     if(name=="connect") {
         if(args.size()!=1||args[0].kind!=Value::Kind::Dict) fail("connect requires one configuration dictionary");
-        std::string database=":memory:",label;bool readonly=false,create=true,foreign_keys=true;
-        auto conn=std::make_shared<Connection>();
-        for(const auto& item:args[0].dict) {
-            if(item.first=="driver") {if(text(item.second,"driver")!="sqlite") fail("driver is not implemented; supported driver: sqlite");}
-            else if(item.first=="database") database=text(item.second,"database");
-            else if(item.first=="name") label=text(item.second,"name");
-            else if(item.first=="busy_timeout") conn->busy_timeout=positive(item.second,"busy_timeout",3600);
-            else if(item.first=="readonly"||item.first=="create"||item.first=="foreign_keys") {
-                if(item.second.kind!=Value::Kind::Bool) fail(item.first+" must be bool");
-                if(item.first=="readonly") readonly=item.second.b;else if(item.first=="create") create=item.second.b;else foreign_keys=item.second.b;
-            } else fail("unknown connection option "+item.first);
-        }
-        if(database.empty()||database.rfind("file:",0)==0) fail("database must be a path or :memory:; SQLite URI mode is not enabled");
+        const Config cfg=configuration(args[0]);
+        const auto& database=cfg.database;const auto& label=cfg.label;
+        const bool readonly=cfg.readonly,create=cfg.create,foreign_keys=cfg.foreign_keys;
+        auto conn=std::make_shared<Connection>();conn->busy_timeout=cfg.busy_timeout;
         const int flags=SQLITE_OPEN_FULLMUTEX|(readonly?SQLITE_OPEN_READONLY:(SQLITE_OPEN_READWRITE|(create?SQLITE_OPEN_CREATE:0)));
         const int rc=sqlite3_open_v2(database.c_str(),&conn->db,flags,nullptr);
         if(rc!=SQLITE_OK) fail("cannot open database: "+std::string(sqlite3_errstr(rc)));

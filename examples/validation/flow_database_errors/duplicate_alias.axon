@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon check.
+# Diagnostic: FlowDatabaseError: ... duplicate database alias
+flow Invalid { database={"primary":{"driver":"sqlite","database":":memory:"},"primary":{"driver":"sqlite","database":":memory:"}} }
+main { print("SHOULD_NOT_RUN") }

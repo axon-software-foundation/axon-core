@@ -682,9 +682,32 @@ void Interpreter::collect(AxonNode* prog, EnvPtr env) {
             Value flow_dict; flow_dict.kind = Value::Kind::Dict;
             flow_dict.dict["name"] = Value::from(flow_name);
 
+            Value databases; databases.kind = Value::Kind::Dict;
+            env->set("flow.database", databases);
+            flow_dict.dict["database"] = databases;
+            bool database_seen = false;
+
             for (size_t j = 0; j < s->as.flow_def.entries.count; ++j) {
                 auto& kv = s->as.flow_def.entries.items[j];
                 Value v  = eval(kv.value, env);
+                if (kv.key && std::string(kv.key) == "database") {
+                    const std::string owner = "FlowDatabaseError: " + flow_name + ".database";
+                    if (database_seen) throw std::runtime_error(owner + " may be declared only once");
+                    database_seen = true;
+                    if (v.kind != Value::Kind::Dict)
+                        throw std::runtime_error(owner + " must be a dictionary of alias -> configuration");
+                    for (const auto& entry : v.dict) {
+                        if (entry.first.empty() || entry.first.find('\0') != std::string::npos)
+                            throw std::runtime_error(owner + ": aliases must be non-empty strings without NUL");
+                        if (entry.second.kind != Value::Kind::Dict)
+                            throw std::runtime_error(owner + "." + entry.first +
+                                " must be a configuration dictionary; wrap a direct config as {primary: {...}}");
+                        try { SqlRuntime::validate_config(entry.second, true); }
+                        catch (const std::exception& error) {
+                            throw std::runtime_error(owner + "." + entry.first + ": " + error.what());
+                        }
+                    }
+                }
                 if (kv.key && std::string(kv.key) == "timeout" && v.kind != Value::Kind::Number)
                     throw std::runtime_error("flow: timeout must be a number");
                 // Set flow.key (current active flow)

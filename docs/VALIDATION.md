@@ -30,9 +30,9 @@ The baseline's external-service detection can print an informational Ollama-unav
 ## What the checks establish
 
 - Runtime suite: 33 cases covering graph traversal, actor state, scheduler and runtime/session memory.
-- Interpreter suite: 137 cases covering expressions, functions, task input/output and delays, among others.
+- Interpreter suite: 141 cases covering expressions, functions, task input/output and delays, among others.
   Eight new cases cover strict user-function arity, closures, recovery and rejection before side effects.
-- CTest: 34 entries, including the two suites, CLI regressions/version and `docs.examples`.
+- CTest: 48 entries, including the two suites, CLI regressions/version and `docs.examples`.
   The new CLI cases check direct and imported arity failures, exit status and call-line diagnostics.
   CTest reuses suites; do not add these counts as independent unit tests.
 - `docs.examples` reads the actual `axon` fences from README, LANGUAGE and MODULES. Each is marked
@@ -122,3 +122,13 @@ or sqlite3 executable. They cover native bindings, transactions, cancellation, l
 read-only files, foreign keys, parallel composition and unfinished-branch transaction rollback.
 Linux Release passed 34/34 CTest checks; Debug native SQL acceptance and the pinned source fetch are
 also checked locally. Native Windows/macOS and clean-machine acceptance remain pending for this patch.
+
+## Contextual flow database registry
+
+The registry block adds four interpreter cases and one native SQL validation case (12 SQL cases total).
+CTest now has 48 entries, including the complete flow_database.axon positive acceptance, the maintainer's
+extended sqlite_test.axon and twelve expected-failure declaration files. The latter verify check/run
+phases, controlled diagnostics and that main never executes for an invalid declaration. Positive cases
+cover ordinary database variables/parameters, active/default/named flow registries, lazy configurations,
+validation without opening, main/functions/parallel, recipe reuse, transactions and lifecycle.
+The positive SQLite/Markdown examples are migrated to the same registry shape.

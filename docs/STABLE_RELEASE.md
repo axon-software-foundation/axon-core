@@ -31,9 +31,10 @@ the release scope is ready; changing the suffix alone does not complete that wor
    CI/package and maintainer HTTPS acceptance remain required before publication.
 5. **Interop and native SQL.** Native SQLite is implemented in the working tree with explicit
    connection lifecycle, parameter binding, typed results and per-connection concurrency controls.
-   Configuration can live in flows/main/functions. Validate the candidate on native platforms;
+   Configuration can live in flows/main/functions. The contextual flow.database alias contract now has
+   focused working-tree validation and an explicit migration from flat declarations. Validate it on native platforms;
    implement DuckDB next, then PostgreSQL as separate driver blocks. Python/shell typed values,
-   process failures and cancellation remain independent work. See [INTEROP.md](../../docs/INTEROP.md).
+   process failures and cancellation remain independent work. See [INTEROP.md](INTEROP.md).
 6. **Remaining release blockers.** Address confirmed failures in the selected modules, document
    explicit support boundaries for document formats/memory/interop, and migrate examples advertised
    as runnable. Add fixtures where they expose a concrete unsupported edge or protect a fix.

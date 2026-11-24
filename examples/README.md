@@ -36,3 +36,10 @@ Internet access. Automated HTTP/TLS fixtures use loopback and are included in CT
 
 - `validation/sqlite.axon`: native SQLite connection configuration, bound parameters, transactions,
   named lookup, functions, parallel reads and raw SQL. Requires no external database/Python/LLM.
+
+- `validation/flow_database.axon`: complete positive acceptance for contextual database registries,
+  multiple aliases, pure validation, ordinary variables, flow separation, functions/parallel and lifecycle.
+- `validation/sqlite_test.axon`: extended SQLite data-layer acceptance; leaves a uniquely named SQLite
+  file for inspection. It now uses the same flow database registry shape.
+- `validation/flow_database_errors/*.axon`: intentional failures, not successful examples. Each file
+  states its expected check/run phase and diagnostic. CTest verifies their expected exit status 1.

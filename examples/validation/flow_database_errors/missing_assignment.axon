@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon check.
+# Diagnostic: FlowDatabaseError: ... database requires
+flow Invalid { database {} }
+main { print("SHOULD_NOT_RUN") }

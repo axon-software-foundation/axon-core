@@ -157,6 +157,17 @@ if(BUILD_TESTING)
     target_link_libraries(axon_test_sql PRIVATE axon_sql)
     add_test(NAME sql.native COMMAND axon_test_sql)
     set_tests_properties(sql.native PROPERTIES TIMEOUT 30)
+    foreach(case_name registry_type alias_type empty_alias missing_driver missing_database legacy_flat_config option_type unsupported_driver
+            duplicate_declaration duplicate_alias duplicate_option missing_assignment)
+        add_test(NAME flow.database.${case_name}
+            COMMAND ${CMAKE_COMMAND}
+                "-DAXON_EXE=$<TARGET_FILE:axon>"
+                "-DTEST_CASE=${case_name}"
+                "-DVALIDATION_DIR=${CMAKE_CURRENT_SOURCE_DIR}/examples/validation"
+                "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/flow-database-cases"
+                -P "../tests/test_flow_database.cmake")
+        set_tests_properties(flow.database.${case_name} PROPERTIES TIMEOUT 25)
+    endforeach()
     find_package(OpenSSL REQUIRED)
     add_executable(axon_test_http tests/test_http.cpp runtime/src/document_io.cpp)
     target_link_libraries(axon_test_http PRIVATE axon_core axon_http OpenSSL::SSL OpenSSL::Crypto)
@@ -179,7 +190,7 @@ if(BUILD_TESTING)
             import_lex_error import_parse_error missing_import private_import
             nested_import duplicate_import circular_import unsupported_hash
             uncaught_raise function_raise caught_raise division_zero
-            task_contract http_invalid_url function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure sqlite)
+            task_contract http_invalid_url function_arity imported_function_arity flow_timeout provider_missing parallel parallel_failure sqlite sqlite_extended flow_database)
         add_test(NAME cli.${case_name}
             COMMAND ${CMAKE_COMMAND}
                 "-DAXON_EXE=$<TARGET_FILE:axon>"

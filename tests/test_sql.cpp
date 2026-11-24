@@ -128,6 +128,17 @@ int main(){
         try{require(rt.call("query",{independent,s("SELECT 42 AS answer")},nullptr,3).list[0].dict.at("answer").n==42,"unrelated query");}catch(...){waiter.join();throw;}
         waiter.join();if(failure)std::rethrow_exception(failure);rt.call("rollback",{first},nullptr,1);
     });
+    test("pure configuration validation has no connection side effects",[]{
+        SqlRuntime rt;auto cfg=obj();cfg.dict["driver"]=s("sqlite");cfg.dict["database"]=s(":memory:");cfg.dict["name"]=s("validated");
+        require(rt.call("validate",{cfg},nullptr,1).b,"validate result");
+        error([&]{rt.call("connection",{s("validated")},nullptr,1);},"unknown connection name");
+        auto db=rt.call("connect",{cfg},nullptr,1);require(rt.call("is_open",{db},nullptr,1).b,"validate reserved the name");
+        auto invalid=cfg;invalid.dict["readonly"]=s("yes");
+        error([&]{rt.call("validate",{invalid},nullptr,1);},"readonly must be bool");
+        error([&]{rt.call("connect",{invalid},nullptr,1);},"readonly must be bool");
+        error([&]{SqlRuntime::validate_config(obj(),true);},"requires explicit driver and database");
+        require(rt.call("validate",{obj()},nullptr,1).b,"direct connection defaults changed");
+    });
     test("driver and configuration validation",[]{
         SqlRuntime rt;auto cfg=obj();cfg.dict["driver"]=s("duckdb");error([&]{rt.call("connect",{cfg},nullptr,1);},"not implemented");
         cfg=obj();cfg.dict["typo"]=n(1);error([&]{rt.call("connect",{cfg},nullptr,1);},"unknown connection option");

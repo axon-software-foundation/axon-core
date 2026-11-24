@@ -1,0 +1,134 @@
+# Positive acceptance for flow.database. Requires only the native SQLite runtime.
+# Run: ./build-flow-database/axon.exe run examples/validation/flow_database.axon
+# Negative declarations are separate files in flow_database_errors/.
+
+flow WithoutDatabases { debug=false }
+flow Accounting {
+    debug=false
+    database={"shared":{"driver":"sqlite","database":":memory:"}}
+}
+flow Dynamic {
+    debug=false
+    database=json->parse('{"shared":{"driver":"sqlite","database":":memory:"}}')
+}
+flow Analytics {
+    debug=false
+    database={"shared":{"driver":"sqlite","database":":memory:"}}
+}
+flow App {
+    debug=false
+    timeout=15
+    database={
+        "primary":{"driver":"sqlite","database":":memory:","name":"primary"},
+        "secondary":{"driver":"sqlite","database":":memory:","name":"secondary"},
+        "worker":{"driver":"sqlite","database":":memory:"},
+        "deferred":{"driver":"sqlite","database":"__axon_validation_only_missing_directory__/never_opened.sqlite"}
+    }
+}
+func assert_ok(ok,message) { if ok != true { raise message } }
+func identity(database) { return database }
+func open_database(config) { return sql->connect(config) }
+func seed(db,value) {
+    sql->execute(db,"CREATE TABLE numbers(value INTEGER)")
+    sql->execute(db,"INSERT INTO numbers VALUES (?)",[value])
+    return sql->query(db,"SELECT sum(value) AS answer FROM numbers")[0]["answer"]
+}
+func answer(db) { return sql->query(db,"SELECT sum(value) AS answer FROM numbers")[0]["answer"] }
+main {
+    # Contextual reservation: ordinary main/function variables keep their meaning.
+    database=42
+    assert_ok(identity(database)==42,"database is not an ordinary function/main variable")
+    database="ordinary variable"
+    assert_ok(database=="ordinary variable","database string assignment failed")
+    assert_ok(WithoutDatabases.database.isempty(),"missing registry should be empty")
+    assert_ok(App.database["primary"]!=null&&App.database["secondary"]!=null&&App.database["worker"]!=null,"registry lost an alias")
+    assert_ok(App.database["missing"]==null,"missing alias should be null")
+    assert_ok(flow.database["primary"]["driver"]=="sqlite","active flow registry lookup failed")
+    rejected=false
+    try { sql->connect(App.database["missing"]) }
+    catch err { rejected=err.find("configuration dictionary")>=0 }
+    assert_ok(rejected,"missing alias silently selected a default database")
+    print("PASS 01: contextual database property and aliases")
+
+    # Configuration validation neither opens a connection nor reserves its name.
+    assert_ok(sql->validate(App.database["primary"]),"valid configuration rejected")
+    assert_ok(sql->validate(App.database["deferred"]),"validation unexpectedly tried to open a file")
+    absent=false
+    try { sql->connection("primary") } catch err { absent=err.find("unknown connection name")>=0 }
+    assert_ok(absent,"declaration/validation opened a database implicitly")
+    rejected=false
+    try { sql->validate({"driver":"sqlite","database":":memory:","readonly":"yes"}) }
+    catch err { rejected=err.find("readonly must be bool")>=0 }
+    assert_ok(rejected,"invalid option type was accepted")
+    rejected=false
+    try { sql->validate({"driver":"duckdb","database":":memory:"}) }
+    catch err { rejected=err.find("not implemented")>=0 }
+    assert_ok(rejected,"an unsupported driver was accepted")
+    rejected=false
+    try { sql->validate({"driver":"sqlite","database":":memory:","typo":true}) }
+    catch err { rejected=err.find("unknown connection option")>=0 }
+    assert_ok(rejected,"unknown configuration field was accepted")
+    print("PASS 02: pure validation and catchable configuration errors")
+
+    # Explicit opening, function arguments, named lookup and separate data.
+    database=open_database(App.database["primary"])
+    secondary=open_database(flow.database["secondary"])
+    seed(database,20)
+    seed(secondary,22)
+    parallel {
+        first=answer(sql->connection("primary"))
+        second=answer(secondary)
+    }
+    assert_ok(first==20&&second==22,"alias data was mixed")
+    assert_ok(first+second==42,"parallel results were lost")
+    rejected=false
+    try { open_database(App.database["primary"]) }
+    catch err { rejected=err.find("name already in use")>=0 }
+    assert_ok(rejected,"live connection name uniqueness was lost")
+    print("PASS 03: main/functions, named lookup and parallel queries")
+
+    # Reusing one configuration opens independent connections, not an implicit singleton.
+    parallel {
+        worker_a=open_database(App.database["worker"])
+        worker_b=open_database(App.database["worker"])
+    }
+    assert_ok(seed(worker_a,7)==7,"first worker failed")
+    assert_ok(seed(worker_b,9)==9,"second worker is not independent")
+    assert_ok(answer(worker_a)==7&&answer(worker_b)==9,"worker data was shared")
+    print("PASS 04: configuration aliases are reusable recipes")
+
+    # Equal aliases in different flow registries remain separate configurations.
+    accounting=open_database(Accounting.database["shared"])
+    analytics=open_database(Analytics.database["shared"])
+    seed(accounting,100)
+    seed(analytics,200)
+    assert_ok(answer(accounting)==100&&answer(analytics)==200,"flow registries were mixed")
+    dynamic=open_database(Dynamic.database["shared"])
+    assert_ok(seed(dynamic,42)==42,"dynamic JSON configuration failed")
+    print("PASS 05: same alias in different flows and dynamic JSON configuration")
+
+    # Transaction semantics are preserved with registry-based configuration.
+    sql->begin(database)
+    sql->execute(database,"INSERT INTO numbers VALUES (?)",[99])
+    sql->rollback(database)
+    assert_ok(answer(database)==20,"rollback failed")
+    sql->use(secondary)
+    sql { SELECT sum(value) AS answer FROM numbers; }
+    assert_ok(sql.result[0]["answer"]==22,"raw SQL selected the wrong connection")
+    print("PASS 06: transactions and raw SQL")
+
+    sql->close(dynamic)
+    sql->close(accounting)
+    sql->close(analytics)
+    sql->close(worker_a)
+    sql->close(worker_b)
+    sql->close(secondary)
+    sql->close(database)
+    assert_ok(sql->is_open(database)==false,"primary connection did not close")
+    assert_ok(sql->validate(App.database["primary"]),"closing damaged the configuration")
+    reopened=open_database(App.database["primary"])
+    assert_ok(seed(reopened,42)==42,"configuration could not be reused after close")
+    sql->close(reopened)
+    print("PASS 07: lifecycle and configuration reuse")
+    print("PASS flow.database complete positive acceptance")
+}
