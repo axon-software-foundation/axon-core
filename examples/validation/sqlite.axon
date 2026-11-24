@@ -2,7 +2,7 @@
 flow Demo {
     debug = false
     timeout = 15
-    database = {"driver":"sqlite", "database":":memory:", "name":"math"}
+    database = {"primary":{"driver":"sqlite", "database":":memory:", "name":"math"}}
 }
 func open_database(config) {
     return sql->connect(config)
@@ -11,7 +11,7 @@ func total(db) {
     return sql->query(db, "SELECT sum(value) AS answer FROM numbers")[0]["answer"]
 }
 main {
-    db = open_database(flow.database)
+    db = open_database(flow.database["primary"])
     sql->execute(db, "CREATE TABLE numbers(value INTEGER NOT NULL)")
     sql->begin(db)
     try {

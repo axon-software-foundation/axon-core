@@ -73,7 +73,8 @@ image inputs. Provider names in old examples are not implemented adapters.
 Expand memory/TTL/persistence, embeddings/HNSW, PDF, DOCX/XLSX, images and OCR integration fixtures.
 Document native PDF architecture rather than claiming MuPDF. Remove fixed OCR temporary-file collisions
 before concurrent use. Consolidate Python/shell typed exchange, result/error reporting, subprocess lifecycle and cancellation.
-Native SQLite connections are implemented in the working tree; validate them across platforms/packages.
+Native SQLite connections have Linux/Windows native/package acceptance. Contextual flow.database alias
+registries and pure sql->validate are implemented in the working tree and require their own acceptance.
 The agreed next driver order is DuckDB, then PostgreSQL, preserving explicit connection configuration
 outside agent/task declarations (flow dictionaries, main and functions). MySQL/MongoDB/Arrow remain
 separate proposals. See INTEROP.md for the current connection and transaction contract.

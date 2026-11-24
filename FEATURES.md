@@ -26,6 +26,7 @@ correctness. **Published** requires actual downloadable artifacts. Historical ph
 | Windows x64 portable | Candidate packaging validated; second-machine manual check | New tag artifacts require their own acceptance |
 | Linux native/Docker | CI validated on configured runner/image | No general distro/architecture compatibility guarantee or published image implied |
 | macOS | Experimental native CI job passed | Non-blocking workflow job; no macOS archive, signing or universal-binary support |
+| Flow database registry | Contextual schema validation and focused tests | Explicit alias configurations, no implicit connections; database remains an ordinary identifier elsewhere; docs/INTEROP.md |
 | Native SQL / SQLite | Implemented in this working tree, native acceptance pending | Explicit connections, bound parameters, transactions and typed rows; docs/INTEROP.md. DuckDB then PostgreSQL remain pending |
 | Whisper | Stub | Empty placeholder response; not transcription support |
 | Public HTTP/HTTPS | Working-tree GET/POST/JSON implementation | Verified TLS, local HTTP/TLS fixtures, limits, deadlines and parallel request overlap; `docs/HTTP_STATUS.md` |

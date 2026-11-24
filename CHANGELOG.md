@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Reserve flow.database contextually as a validated alias-to-configuration registry, with explicit driver
+  and database fields; keep database available as an ordinary variable/function parameter elsewhere.
+- Reject duplicate literal declarations/aliases/options; report runtime schema errors with flow/alias
+  context, default absent registries to empty, and prevent active-registry leakage between flows.
+- Add pure sql->validate without opening resources; migrate the first SQLite examples and provide
+  complete positive Axon acceptance plus expected-failure declaration fixtures.
+
 - Add native SQLite connections with flow/main/function configuration, named lookup, bound parameters,
   typed results, query/execute/script, explicit transactions and close semantics.
 - Coordinate connections per interpreter family and prevent sibling branches from interleaving an

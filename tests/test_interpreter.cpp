@@ -1382,10 +1382,10 @@ void test_http_local_timeout_is_catchable() {
 }
 void test_sql_flow_configuration_and_function_handle() {
     auto v=run(R"AXONSQL(
-        flow Data { debug=false database={"driver":"sqlite","database":":memory:"} }
+        flow Data { debug=false database={"primary":{"driver":"sqlite","database":":memory:"}} }
         func open(config) { return sql->connect(config) }
         func read(db) { return sql->query(db,"SELECT 42 AS answer")[0]["answer"] }
-        main { db=open(Data.database) answer=read(db) sql->close(db) return answer }
+        main { db=open(Data.database["primary"]) answer=read(db) sql->close(db) return answer }
     )AXONSQL");
     ASSERT_EQ(v.n,42.0);
 }
@@ -1480,6 +1480,51 @@ void test_sql_storage_query_alias_and_statement_diagnostics() {
         }
     )AXONSQL");
     ASSERT_EQ(v.n,42.0);
+}
+
+void test_flow_database_registry_and_ordinary_variables() {
+    auto v=run(R"AXON(
+        flow F { debug=false database={"primary":{"driver":"sqlite","database":":memory:"}} }
+        func echo(database) { return database }
+        main { database=42 if echo(database)!=42 {raise "ordinary variable"}
+            db=sql->connect(F.database["primary"]) rows=sql->query(db,"SELECT 7 AS answer") sql->close(db)
+            return rows[0]["answer"]+database }
+    )AXON");
+    ASSERT_EQ(v.n,49.0);
+}
+void test_flow_database_is_declarative_and_validation_is_pure() {
+    auto v=run(R"AXON(
+        flow F { debug=false database={"primary":{"driver":"sqlite","database":":memory:","name":"lazy"}} }
+        main {
+            sql->validate(F.database["primary"]) missing=false
+            try {sql->connection("lazy")} catch err { missing=true }
+            db=sql->connect(F.database["primary"]) sql->close(db) return missing
+        }
+    )AXON");
+    ASSERT_EQ(v.b,true);
+}
+void test_flow_database_registries_do_not_leak_between_flows() {
+    auto v=run(R"AXON(
+        flow First { debug=false database={"shared":{"driver":"sqlite","database":":memory:"}} }
+        flow Last { debug=false }
+        main {
+            if typeof(Last.database)!="dict" {raise "default registry type"}
+            if Last.database.isempty()!=true || flow.database.isempty()!=true {raise "active registry leak"}
+            db=sql->connect(First.database["shared"]) sql->close(db) return true
+        }
+    )AXON");
+    ASSERT_EQ(v.b,true);
+}
+void test_flow_database_error_identifies_flow_alias_and_option() {
+    bool caught=false;
+    try {run(R"AXON(
+        flow BadFlow {database={"analytics":{"driver":"sqlite","database":":memory:","readonly":42}}}
+        main {raise "main must not run"}
+    )AXON");} catch(const std::exception& e) {
+        const std::string message=e.what();
+        caught=message.find("FlowDatabaseError: BadFlow.database.analytics")!=std::string::npos&&message.find("readonly must be bool")!=std::string::npos;
+    }
+    ASSERT_EQ(caught,true);
 }
 
 int main() {
@@ -1654,6 +1699,10 @@ int main() {
     TEST(sql_local_timeout_can_be_caught_and_recovered);
     TEST(sql_branch_transaction_is_rolled_back_on_exit);
     TEST(sql_storage_query_alias_and_statement_diagnostics);
+    TEST(flow_database_registry_and_ordinary_variables);
+    TEST(flow_database_is_declarative_and_validation_is_pure);
+    TEST(flow_database_registries_do_not_leak_between_flows);
+    TEST(flow_database_error_identifies_flow_alias_and_option);
 
 
 

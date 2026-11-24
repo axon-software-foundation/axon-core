@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon run.
+# Diagnostic: FlowDatabaseError: ... readonly must be bool
+flow Invalid { database={"primary":{"driver":"sqlite","database":":memory:","readonly":"yes"}} }
+main { print("SHOULD_NOT_RUN") }

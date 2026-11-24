@@ -1,0 +1,4 @@
+# EXPECTED FAILURE: exit 1 from axon run.
+# Diagnostic: FlowDatabaseError: ... not implemented
+flow Invalid { database={"primary":{"driver":"duckdb","database":":memory:"}} }
+main { print("SHOULD_NOT_RUN") }

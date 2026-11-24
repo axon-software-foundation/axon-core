@@ -127,3 +127,7 @@ Axon code is MIT licensed: see [LICENSE](LICENSE). Dependencies retain their lic
 Native SQLite connections are available in the current source tree; see [interop and SQL](docs/INTEROP.md).
 Configuration can live in flow dictionaries, main or functions. The first build fetches pinned SQLite
 sources; the resulting runtime needs no external SQLite DLL, CLI, Python or server for this module.
+
+Within a flow, `database` declares configurations by alias; opening is explicit. See
+[the connection contract and migration](docs/INTEROP.md#contextual-flowdatabase-registry) and
+`examples/validation/flow_database.axon` for executable acceptance.

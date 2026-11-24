@@ -9,6 +9,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <sstream>
+#include <set>
 
 // ─────────────────────────────────────────────────────────────
 // Arena allocator implementation
@@ -233,6 +234,7 @@ AxonNode* Parser::parse_flow() {
     n->as.flow_def.output_config.level     = AXON_LOG_INFO;
     n->as.flow_def.output_config.format    = AXON_OUT_STRUCTURED;
     expect(TK::LBRACE, "flow body");
+    bool database_seen = false;
     while (!check(TK::RBRACE) && !at_end()) {
         if (check(TK::KW_OUTPUT)) {
             advance();
@@ -242,11 +244,36 @@ AxonNode* Parser::parse_flow() {
             if (!check(TK::IDENT) && current().type < TK::KW_IMPORT) {
                 advance(); continue;
             }
+            const Token property = current();
             std::string key = current().value; advance();
+            if (key == "database") {
+                if (database_seen) _errors.push_back({"FlowDatabaseError: duplicate database declaration", property.line, property.col});
+                database_seen = true;
+                if (!check(TK::ASSIGN)) error("FlowDatabaseError: database requires '=' followed by an alias registry");
+            }
             // Guard: if no '=' follows, skip to avoid infinite loop
             if (!check(TK::ASSIGN)) { continue; }
             advance(); // consume '='
             AxonNode* val = parse_expr();
+            if (key == "database" && val && val->type == AXON_NODE_DICT) {
+                std::set<std::string> aliases;
+                for (size_t i = 0; i < val->as.dict.pairs.count; ++i) {
+                    AxonNode* pair = val->as.dict.pairs.items[i];
+                    const std::string alias = pair->as.dict_pair.key;
+                    if (!aliases.insert(alias).second)
+                        _errors.push_back({"FlowDatabaseError: duplicate database alias '" + alias + "'", pair->loc.line, pair->loc.col});
+                    AxonNode* config = pair->as.dict_pair.value;
+                    if (config && config->type == AXON_NODE_DICT) {
+                        std::set<std::string> keys;
+                        for (size_t j = 0; j < config->as.dict.pairs.count; ++j) {
+                            AxonNode* field = config->as.dict.pairs.items[j];
+                            const std::string name = field->as.dict_pair.key;
+                            if (!keys.insert(name).second)
+                                _errors.push_back({"FlowDatabaseError: duplicate configuration key '" + name + "' in alias '" + alias + "'", field->loc.line, field->loc.col});
+                        }
+                    }
+                }
+            }
             if (val)
                 axon_kvlist_push(&n->as.flow_def.entries,
                                  intern(key), val, _arena);
