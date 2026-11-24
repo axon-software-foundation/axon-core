@@ -1,7 +1,7 @@
 /**
  * runtime/src/lexer.cpp — Axon Lexer implementation
  */
-#include "../include/lexer.h"
+#include "lexer.h"
 #include <cctype>
 #include <sstream>
 
@@ -138,7 +138,7 @@ std::vector<Token> Lexer::tokenize() {
             if (!at_end() && peek() == '{') {
                 advance();                              // consume '{'
                 tokens.push_back(make(TK::LBRACE, "{"));
-                tokens.push_back(read_raw_block());
+                tokens.push_back(read_raw_block(tok.type));
                 tokens.push_back(make(TK::RBRACE, "}"));
             }
             continue;
@@ -351,11 +351,38 @@ Token Lexer::read_ident_or_kw() {
 }
 
 // Called by parser after consuming the interop keyword + '{'
-Token Lexer::read_raw_block() {
+Token Lexer::read_raw_block(TK language) {
     std::string code;
     int depth = 1;
     while (!at_end()&&depth>0) {
         char c = peek();
+        if (language == TK::KW_SQL) {
+            // SQL literals, quoted identifiers and comments may contain unmatched braces.
+            if (c == '\'' || c == '"' || c == '`' || c == '[') {
+                const char close = c == '[' ? ']' : c;
+                code += advance();
+                while (!at_end()) {
+                    const char ch = advance(); code += ch;
+                    if (ch == close) {
+                        if (peek() == close) { code += advance(); continue; }
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (c == '-' && peek(1) == '-') {
+                while (!at_end() && peek() != '\n') code += advance();
+                continue;
+            }
+            if (c == '/' && peek(1) == '*') {
+                code += advance(); code += advance();
+                while (!at_end()) {
+                    if (peek() == '*' && peek(1) == '/') { code += advance(); code += advance(); break; }
+                    code += advance();
+                }
+                continue;
+            }
+        }
         if (c=='{')      ++depth;
         else if (c=='}') { if(--depth==0) break; }
         code+=advance();

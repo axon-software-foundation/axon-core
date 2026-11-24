@@ -123,3 +123,7 @@ they are not all release acceptance examples. Historical RFCs are design records
 
 Axon code is MIT licensed: see [LICENSE](LICENSE). Dependencies retain their licenses in
 [licenses](licenses) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Native SQLite connections are available in the current source tree; see [interop and SQL](docs/INTEROP.md).
+Configuration can live in flow dictionaries, main or functions. The first build fetches pinned SQLite
+sources; the resulting runtime needs no external SQLite DLL, CLI, Python or server for this module.

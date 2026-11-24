@@ -4,7 +4,7 @@
  * Recursive descent parser for the Axon language.
  */
 
-#include "../include/axon_parser.h"
+#include "axon_parser.h"
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -444,7 +444,8 @@ AxonNode* Parser::parse_statement() {
         case TK::KW_SPAWN:    return parse_spawn();
         case TK::KW_PYTHON: case TK::KW_SQL:
         case TK::KW_SHELL:  case TK::KW_CPP:
-            return parse_interop_block();
+            if (peek(1).type == TK::LBRACE) return parse_interop_block();
+            return parse_assignment_or_expr();
         default:
             return parse_assignment_or_expr();
     }
@@ -703,6 +704,12 @@ AxonNode* Parser::parse_interop_block() {
     }
     advance(); // consume lang keyword
     expect(TK::LBRACE,"interop block open");
+    if (check(TK::RAW_CODE)) {
+        n->as.interop_block.lang = lang;
+        n->as.interop_block.code = intern(advance().value);
+        expect(TK::RBRACE, "interop block close");
+        return n;
+    }
     // Use lexer's raw block reader — but we already have tokens.
     // We need the raw source. Collect token values until matching '}'.
     // Simpler: RAW_CODE token is produced by the lexer before we reach here

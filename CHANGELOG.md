@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Add native SQLite connections with flow/main/function configuration, named lookup, bound parameters,
+  typed results, query/execute/script, explicit transactions and close semantics.
+- Coordinate connections per interpreter family and prevent sibling branches from interleaving an
+  active transaction; support inherited query budgets/cancellation and bounded materialized results.
+- Execute raw SQL blocks on an explicitly selected connection; preserve braces in SQL literals/comments.
+  Replace the storage query placeholder with an explicit-connection SQL alias.
+- Pin static SQLite source provenance and add native, interpreter and CLI regressions. DuckDB then
+  PostgreSQL remain subsequent driver blocks; Python/shell completion is tracked independently.
+
 - Implement public GET/POST/JSON and verified HTTPS using an independent libcurl transport, with structured
   responses, explicit errors, inherited deadlines/cancellation, limits and opt-in same-origin redirects.
 - Add controlled local HTTP/TLS fixtures and interpreter request-overlap coverage; register PDF progress

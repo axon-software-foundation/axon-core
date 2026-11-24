@@ -1,0 +1,346 @@
+# Guardar como: examples/validation/data_checks.axon
+# Ejecutar desde la raíz del repositorio:
+# ./build-sqlite-package/axon.exe run examples/validation/data_checks.axon
+#
+# Crea un archivo SQLite con nombre único para inspeccionarlo con DB Browser.
+
+flow DataChecks {
+    debug = false
+    timeout = 30
+    database = {
+        "driver": "sqlite",
+        "database": ":memory:",
+        "name": "primary"
+    }
+}
+
+func assert_ok(ok, message) {
+    if ok != true { raise message }
+}
+
+func product_count(db) {
+    return sql->query(
+        db,
+        "SELECT count(*) AS total FROM products"
+    )[0]["total"]
+}
+
+func inventory_value(db) {
+    return sql->query(
+        db,
+        "SELECT sum(price * stock) AS total FROM products"
+    )[0]["total"]
+}
+
+main {
+    # 1. Esquema, parámetros posicionales/nombrados y commit.
+    database = sql->connect(DataChecks.database)
+
+    sql->script(database, "
+        CREATE TABLE products(
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            price REAL CHECK(price >= 0),
+            stock INTEGER
+        );
+        CREATE TABLE sales(
+            id INTEGER PRIMARY KEY,
+            product_id INTEGER REFERENCES products(id),
+            quantity INTEGER
+        );
+        CREATE TABLE payloads(
+            id INTEGER PRIMARY KEY,
+            content BLOB
+        );
+    ")
+
+    sql->begin(database)
+    try {
+        sql->execute(
+            database,
+            "INSERT INTO products VALUES (?, ?, ?, ?)",
+            [1, "Notebook", 25, 10]
+        )
+        sql->execute(
+            database,
+            "INSERT INTO products VALUES (?, ?, ?, ?)",
+            [2, "Keyboard", 40, 5]
+        )
+        inserted = sql->execute(
+            database,
+            "INSERT INTO products VALUES (:id, :name, :price, :stock)",
+            {"id":3, "name":"Mouse", "price":15.5, "stock":8}
+        )
+
+        assert_ok(inserted["changes"] == 1, "Incorrect insert metadata")
+        assert_ok(inserted["in_transaction"], "Transaction is not active")
+        sql->commit(database)
+    } catch err {
+        sql->rollback(database)
+        raise err
+    }
+
+    assert_ok(product_count(database) == 3, "Committed data is missing")
+    print("PASS 01: schema, parameters and commit")
+
+    # 2. Conexiones independientes, funciones y consultas en parallel.
+    secondary = sql->connect({
+        "database": ":memory:",
+        "name": "secondary"
+    })
+
+    sql->execute(secondary, "CREATE TABLE products(id INTEGER PRIMARY KEY)")
+    sql->execute(secondary, "INSERT INTO products VALUES (?)", [99])
+
+    parallel {
+        primary_count = product_count(sql->connection("primary"))
+        secondary_count = product_count(secondary)
+        total_value = inventory_value(database)
+    }
+
+    assert_ok(
+        primary_count == 3 && secondary_count == 1,
+        "Connection data was mixed"
+    )
+    assert_ok(total_value == 574, "Incorrect parallel aggregation")
+    print("PASS 02: independent connections and parallel queries")
+
+    # 3. Rollback de toda la transacción ante una clave duplicada.
+    rolled_back = false
+    sql->begin(database)
+    try {
+        sql->execute(
+            database,
+            "INSERT INTO products VALUES (?, ?, ?, ?)",
+            [4, "Temporary", 1, 1]
+        )
+        sql->execute(
+            database,
+            "INSERT INTO products VALUES (?, ?, ?, ?)",
+            [1, "Duplicate", 1, 1]
+        )
+        sql->commit(database)
+    } catch err {
+        sql->rollback(database)
+        rolled_back = err.find("SqlError:") == 0
+    }
+
+    assert_ok(
+        rolled_back && product_count(database) == 3,
+        "Transaction rollback failed"
+    )
+    print("PASS 03: constraint error and rollback")
+
+    # 4. Claves foráneas, JOIN y GROUP BY.
+    sql->execute(database, "INSERT INTO sales VALUES (?, ?, ?)", [1, 1, 2])
+    sql->execute(database, "INSERT INTO sales VALUES (?, ?, ?)", [2, 2, 1])
+
+    rejected = false
+    try {
+        sql->execute(
+            database,
+            "INSERT INTO sales VALUES (?, ?, ?)",
+            [3, 999, 1]
+        )
+    } catch err {
+        rejected = err.find("FOREIGN KEY") >= 0
+    }
+    assert_ok(rejected, "Invalid foreign key was accepted")
+
+    sales = sql->query(database, "
+        SELECT
+            p.name AS product,
+            sum(s.quantity) AS units,
+            sum(p.price * s.quantity) AS revenue
+        FROM products p
+        JOIN sales s ON s.product_id = p.id
+        GROUP BY p.id
+        ORDER BY p.id
+    ")
+
+    assert_ok(sales.size() == 2, "Incorrect JOIN row count")
+    assert_ok(
+        sales[0]["revenue"] == 50 && sales[1]["revenue"] == 40,
+        "Incorrect revenue"
+    )
+    print("PASS 04: foreign keys, JOIN and aggregation")
+
+    # 5. Texto que parece SQL se trata como un dato.
+    external_text = "x'); DROP TABLE products; --"
+    echoed = sql->query(
+        database,
+        "SELECT :payload AS payload",
+        {"payload":external_text}
+    )
+
+    assert_ok(echoed[0]["payload"] == external_text, "Bound text was modified")
+    assert_ok(product_count(database) == 3, "Parameter executed as SQL")
+    print("PASS 05: parameter binding")
+
+    # 6. NULL, Unicode, decimales, enteros grandes y datos binarios.
+    typed = sql->query(
+        database,
+        "SELECT NULL AS missing, ? AS text, 3.5 AS decimal_value, 9223372036854775807 AS large_integer, X'00FF10' AS binary_value",
+        ["Español: café y piña"]
+    )[0]
+
+    assert_ok(typed["missing"] == null, "NULL was not preserved")
+    assert_ok(typed["text"] == "Español: café y piña", "Unicode was damaged")
+    assert_ok(typed["decimal_value"] == 3.5, "Decimal was damaged")
+
+    # Los enteros SQL fuera del rango seguro de double se preservan como strings.
+    assert_ok(
+        typed["large_integer"] == "9223372036854775807",
+        "Large integer lost precision"
+    )
+
+    sql->execute(
+        database,
+        "INSERT INTO payloads VALUES (?, ?)",
+        [1, typed["binary_value"]]
+    )
+    binary = sql->query(
+        database,
+        "SELECT hex(content) AS encoded, length(content) AS size FROM payloads WHERE id=?",
+        [1]
+    )[0]
+
+    assert_ok(
+        binary["encoded"] == "00FF10" && binary["size"] == 3,
+        "Binary round-trip failed"
+    )
+    assert_ok(
+        sql->query(database, "SELECT id FROM products WHERE id=?", [999]).size() == 0,
+        "Empty query failed"
+    )
+    print("PASS 06: typed values and binary data")
+
+    # 7. CTE y funciones de ventana calculadas localmente.
+    ranked = sql->query(database, "
+        WITH inventory AS (
+            SELECT id, price FROM products
+        )
+        SELECT
+            row_number() OVER (ORDER BY id) AS position,
+            sum(price) OVER (ORDER BY id) AS running_total
+        FROM inventory
+        ORDER BY id
+    ")
+
+    assert_ok(
+        ranked[2]["position"] == 3 && ranked[2]["running_total"] == 80.5,
+        "Window calculation failed"
+    )
+    print("PASS 07: CTE and window functions")
+
+    # 8. Bloque SQL y múltiples conjuntos de resultados.
+    sql->use(database)
+    sql {
+        -- Esta llave pertenece al comentario: }
+        SELECT '}' AS literal;
+        SELECT count(*) AS total FROM products;
+    }
+
+    assert_ok(sql.results.size() == 2, "Raw SQL lost a result set")
+    assert_ok(
+        sql.results[0]["rows"][0]["literal"] == "}",
+        "SQL literal was damaged"
+    )
+    assert_ok(sql.result[0]["total"] == 3, "Raw SQL final result failed")
+    print("PASS 08: raw SQL and result sets")
+
+    # 9. Los límites generan errores, sin truncar silenciosamente.
+    rejected = false
+    try {
+        sql->query(
+            database,
+            "SELECT id FROM products",
+            [],
+            {"max_rows":2}
+        )
+    } catch err {
+        rejected = err.find("row limit") >= 0
+    }
+
+    assert_ok(
+        rejected && product_count(database) == 3,
+        "Limit handling or recovery failed"
+    )
+    print("PASS 09: row limits and recovery")
+
+    # 10. Persistencia y reapertura en modo de solo lectura.
+    token = sql->query(
+        database,
+        "SELECT lower(hex(randomblob(16))) AS token"
+    )[0]["token"]
+
+    db_path = "axon-data-check-" + token + ".sqlite"
+    persistent = sql->connect({"database":db_path})
+
+    sql->execute(
+        persistent,
+        "CREATE TABLE audit(id INTEGER PRIMARY KEY, message TEXT)"
+    )
+    sql->execute(
+        persistent,
+        "INSERT INTO audit VALUES (?, ?)",
+        [1, "Persisted from Axon"]
+    )
+    sql->close(persistent)
+
+    readonly = sql->connect({
+        "database": db_path,
+        "readonly": true,
+        "create": false
+    })
+
+    saved = sql->query(
+        readonly,
+        "SELECT message FROM audit WHERE id=?",
+        [1]
+    )
+    assert_ok(
+        saved[0]["message"] == "Persisted from Axon",
+        "Persistence failed"
+    )
+
+    rejected = false
+    try {
+        sql->execute(
+            readonly,
+            "INSERT INTO audit VALUES (?, ?)",
+            [2, "Should fail"]
+        )
+    } catch err {
+        rejected = err.find("readonly") >= 0
+    }
+
+    assert_ok(rejected, "Read-only connection accepted a write")
+    sql->close(readonly)
+    print("PASS 10: persistence and read-only access")
+    print("SQLite file for DB Browser: ", db_path)
+
+    # 11. Cierre explícito y rechazo de consultas posteriores.
+    sql->close(secondary)
+    assert_ok(
+        sql->close(secondary) == false,
+        "Repeated close should return false"
+    )
+
+    sql->close(database)
+    assert_ok(
+        sql->is_open(database) == false,
+        "Closed connection appears open"
+    )
+
+    rejected = false
+    try {
+        sql->query(database, "SELECT 1 AS value")
+    } catch err {
+        rejected = err.find("closed") >= 0
+    }
+
+    assert_ok(rejected, "Query on closed connection was accepted")
+    print("PASS 11: connection lifecycle")
+    print("ALL DATA CHECKS PASSED")
+}

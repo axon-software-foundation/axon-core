@@ -1,7 +1,7 @@
 # Native modules — 0.4.0-alpha.1
 
 Native calls use `module->function(...)` without imports. The dispatcher is in
-[runtime/src/interpreter.cpp](../runtime/src/interpreter.cpp); image, codec and hash operations
+[runtime/src/interpreter.cpp](../../runtime/src/interpreter.cpp); image, codec and hash operations
 are delegated to [modules.cpp](../runtime/src/modules.cpp). Implementation and validation are
 separate: the examples below assert selected behavior, not complete conformance of each API.
 
@@ -160,7 +160,8 @@ boundaries are not certified by the example. Inspect the implementation before r
 | OCR (Tesseract) | `ocr->installed()`, `languages()`, `read(path, language="eng")` | Tesseract and language data are external. Local Linux success/failure checks passed; no complete CI OCR integration matrix |
 | Shell | `shell { ... }`, `shell->exec(command)`, `shell.stdout`, `shell.exitcode` | Executes commands with host permissions; shell syntax and exit handling are platform-dependent |
 | Python | `python { ... }` | External interpreter integration exists; not required or fully validated by the baseline. Not a native Python package manager |
-| Storage | `storage->query(...)` | Stub returning an empty list; no working database driver |
+| SQL / SQLite | `sql->connect/query/execute/script`, transaction/lifecycle calls | Native explicit connections; see INTEROP.md |
+| Storage alias | `storage->query(db, statement, params, options)` | SQL query alias; no implicit connection or additional drivers |
 | Whisper | `whisper->transcribe(...)` | Stub returning an empty string; no working transcription integration |
 | HTTP/HTTPS | `http->get/post/json` | Public module in the working tree; verified TLS, structured responses and limits; see HTTP_STATUS.md |
 | MCP, gRPC, WebSockets, mesh | Design/interface work | No supported public module contract in this alpha |
@@ -190,5 +191,27 @@ main {
         caught=true
     }
     if caught == false { raise "invalid HTTP JSON was accepted" }
+}
+```
+
+## Native SQL / SQLite
+
+Connections can be configured in flow dictionaries, opened in main/functions, passed to agents/tasks,
+and looked up by name in the same interpreter family. See [INTEROP.md](../../docs/INTEROP.md) for SQL types,
+transaction ownership, parameters, limits, cancellation, build provenance and pending drivers.
+
+<!-- axon-check: run -->
+```axon
+flow Data { debug=false database={"driver":"sqlite","database":":memory:"} }
+func open_database(config) { return sql->connect(config) }
+main {
+    db=open_database(Data.database)
+    sql->execute(db,"CREATE TABLE numbers(value INTEGER)")
+    sql->begin(db)
+    sql->execute(db,"INSERT INTO numbers VALUES (?)",[42])
+    sql->commit(db)
+    rows=sql->query(db,"SELECT value FROM numbers")
+    if rows[0]["value"] != 42 { raise "SQLite result" }
+    sql->close(db)
 }
 ```

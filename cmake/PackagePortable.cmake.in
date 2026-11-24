@@ -40,7 +40,7 @@ file(COPY "${source}/licenses" DESTINATION "${root}")
 file(COPY "${source}/docs/PORTABLE.md" "${source}/docs/RELEASE_NOTES.md"
     "${source}/docs/ROADMAP.md" "${source}/docs/HTTP_STATUS.md"
     "${source}/docs/LANGUAGE.md" "${source}/docs/MODULES.md"
-    "${source}/docs/EXECUTION_CONTROL.md" "${source}/docs/PARALLEL.md" DESTINATION "${root}/docs")
+    "${source}/docs/EXECUTION_CONTROL.md" "${source}/docs/PARALLEL.md" "${source}/docs/INTEROP.md" DESTINATION "${root}/docs")
 file(COPY "${source}/examples/validation" DESTINATION "${root}/examples")
 file(COPY "${source}/examples/flows.axon" DESTINATION "${root}/examples")
 
@@ -163,7 +163,7 @@ if(version_pos LESS 0)
     message(FATAL_ERROR "Extracted CLI version does not match VERSION")
 endif()
 smoke(0 test)
-foreach(sample functions main tasks delays)
+foreach(sample functions main tasks delays sqlite)
     smoke(0 run "${installed}/examples/validation/${sample}.axon")
 endforeach()
 smoke(0 run "${installed}/examples/flows.axon")

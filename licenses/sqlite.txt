@@ -1,0 +1,11 @@
+SQLite 3.54.1 — public domain
+
+Official source: https://www.sqlite.org/2026/sqlite-amalgamation-3540100.zip
+SHA256: 0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9
+SHA3-256: 92281c86e2957f9b9305890f9ac04204caa7b677cc868dc326d942689df28e30
+The archive SHA3-256 was checked against the official SQLite download page.
+
+SQLite's core source is dedicated to the public domain by its authors.
+Official dedication and terms: https://www.sqlite.org/copyright.html
+The upstream source notices remain unmodified in the fetched amalgamation.
+Axon links the core SQLite library; the SQLite CLI and unrelated build tools are not distributed.

@@ -14,9 +14,9 @@
 #include <chrono>
 #include <vector>
 #include "http_fixture.h"
-#include "../runtime/include/lexer.h"
-#include "../runtime/include/axon_parser.h"
-#include "../runtime/include/interpreter.h"
+#include "lexer.h"
+#include "axon_parser.h"
+#include "interpreter.h"
 
 using namespace axon;
 
@@ -1380,6 +1380,108 @@ void test_http_local_timeout_is_catchable() {
     const std::string source="flow F { debug=false timeout=3 } main { caught=false try { http->get(\""+server.url()+"\",{\"proxy\":\"\",\"timeout\":0.03}) } catch err { if err.find(\"TimeoutError: HTTP request\") != 0 { raise \"wrong error\" } caught=true } return caught }";
     ASSERT_EQ(run(source).b,true);
 }
+void test_sql_flow_configuration_and_function_handle() {
+    auto v=run(R"AXONSQL(
+        flow Data { debug=false database={"driver":"sqlite","database":":memory:"} }
+        func open(config) { return sql->connect(config) }
+        func read(db) { return sql->query(db,"SELECT 42 AS answer")[0]["answer"] }
+        main { db=open(Data.database) answer=read(db) sql->close(db) return answer }
+    )AXONSQL");
+    ASSERT_EQ(v.n,42.0);
+}
+void test_sql_agent_lookup_and_parallel_reads() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        agent Reader { main { db=sql->connection("primary") return sql->query(db,"SELECT 42 AS answer")[0]["answer"] } }
+        main {
+            db=sql->connect({"name":"primary"})
+            parallel { a=Reader(1) b=sql->query(db,"SELECT 42 AS answer")[0]["answer"] }
+            sql->close(db) return a+b
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,84.0);
+}
+void test_sql_raw_literals_comments_and_quoted_identifiers() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        main {
+            db=sql->connect({}) sql->use(db)
+            sql {
+                SELECT '}' AS [a}], 'it''s {' AS "b{"; -- }
+                /* { */ SELECT 42 AS answer;
+            }
+            answer=sql.result[0]["answer"] sql->close(db) return answer
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,42.0);
+}
+void test_sql_explicit_connection_and_catchable_errors() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        main {
+            caught=0
+            try { sql { SELECT 1; } } catch err { caught=caught+1 }
+            db=sql->connect({})
+            try { sql->query(db,"SELECT ?",[]) } catch err { caught=caught+1 }
+            sql->close(db)
+            try { sql->query(db,"SELECT 1") } catch err { caught=caught+1 }
+            return caught
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,3.0);
+}
+void test_sql_parent_transaction_cannot_be_interleaved() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        func read(db) { return sql->query(db,"SELECT 1") }
+        main {
+            db=sql->connect({}) sql->begin(db) caught=false
+            try { parallel { a=read(db) b=read(db) } } catch err { caught=true }
+            sql->rollback(db) sql->close(db) return caught
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.b,true);
+}
+void test_sql_local_timeout_can_be_caught_and_recovered() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false timeout=5 }
+        main {
+            db=sql->connect({}) caught=false
+            try {
+                sql->query(db,"WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100000000) SELECT sum(x) AS total FROM n",[],{"timeout":0.01})
+            } catch err { caught=true }
+            rows=sql->query(db,"SELECT 42 AS answer") sql->close(db)
+            if caught == false { raise "SQL timeout was lost" } return rows[0]["answer"]
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,42.0);
+}
+
+void test_sql_branch_transaction_is_rolled_back_on_exit() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        func pending(db) { sql->begin(db) sql->execute(db,"INSERT INTO t VALUES(1)") return 1 }
+        main {
+            db=sql->connect({}) sql->execute(db,"CREATE TABLE t(value)")
+            parallel { a=pending(db) }
+            rows=sql->query(db,"SELECT count(*) AS count FROM t") sql->close(db) return rows[0]["count"]
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,0.0);
+}
+void test_sql_storage_query_alias_and_statement_diagnostics() {
+    auto v=run(R"AXONSQL(
+        flow F { debug=false }
+        main {
+            db=sql->connect({}) rows=storage->query(db,"SELECT 42 AS answer")
+            caught=false
+            try { sql->query(db,"SELECT missing FROM nowhere") } catch err { caught=true }
+            sql->close(db) if caught == false { raise "SQL error was hidden" } return rows[0]["answer"]
+        }
+    )AXONSQL");
+    ASSERT_EQ(v.n,42.0);
+}
+
 int main() {
     std::cout << "═══════════════════════════════════════════\n";
     std::cout << "  Axon Interpreter Tests\n";
@@ -1544,6 +1646,14 @@ int main() {
     TEST(parallel_print_source_order);
     TEST(parallel_host_cancellation);
     TEST(parallel_nested_failure);
+    TEST(sql_flow_configuration_and_function_handle);
+    TEST(sql_agent_lookup_and_parallel_reads);
+    TEST(sql_raw_literals_comments_and_quoted_identifiers);
+    TEST(sql_explicit_connection_and_catchable_errors);
+    TEST(sql_parent_transaction_cannot_be_interleaved);
+    TEST(sql_local_timeout_can_be_caught_and_recovered);
+    TEST(sql_branch_transaction_is_rolled_back_on_exit);
+    TEST(sql_storage_query_alias_and_statement_diagnostics);
 
 
 
