@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <set>
+#include <cctype>
 
 // ─────────────────────────────────────────────────────────────
 // Arena allocator implementation
@@ -125,6 +126,7 @@ bool Parser::match(TK t) {
 }
 
 const Token& Parser::expect(TK t, const std::string& ctx) {
+    if(t == TK::IDENT && current().value == "__result__") error("InteropError: __result__ is reserved and read-only");
     if (check(t)) return advance();
     std::ostringstream ss;
     ss << "expected " << Token{t,"",0,0}.type_name()
@@ -236,6 +238,7 @@ AxonNode* Parser::parse_flow() {
     expect(TK::LBRACE, "flow body");
     bool database_seen = false;
     while (!check(TK::RBRACE) && !at_end()) {
+        if (check(TK::KW_PYTHON)) { error("PythonInteropError: python blocks are not allowed directly in flow, agent or task"); parse_interop_block(); continue; }
         if (check(TK::KW_OUTPUT)) {
             advance();
             parse_output_config(&n->as.flow_def.output_config);
@@ -298,6 +301,7 @@ AxonNode* Parser::parse_agent() {
 
 void Parser::parse_agent_body(AxonNode* agent) {
     while (!check(TK::RBRACE) && !at_end()) {
+        if (check(TK::KW_PYTHON)) { error("PythonInteropError: python blocks are not allowed directly in flow, agent or task"); parse_interop_block(); continue; }
         if (check(TK::KW_PROVIDER)) {
             advance();
             auto v = current().value; advance();
@@ -429,6 +433,7 @@ AxonNode* Parser::parse_task() {
     axon_kvlist_init(&n->as.task_def.entries);
     expect(TK::LBRACE,"task body");
     while (!check(TK::RBRACE) && !at_end()) {
+        if (check(TK::KW_PYTHON)) { error("PythonInteropError: python blocks are not allowed directly in task"); parse_interop_block(); continue; }
         if (check(TK::KW_IO)) {
             n->as.task_def.io_block = parse_io_block();
         } else {
@@ -471,7 +476,7 @@ AxonNode* Parser::parse_statement() {
         case TK::KW_SPAWN:    return parse_spawn();
         case TK::KW_PYTHON: case TK::KW_SQL:
         case TK::KW_SHELL:  case TK::KW_CPP:
-            if (peek(1).type == TK::LBRACE) return parse_interop_block();
+            if (peek(1).type == TK::LBRACE || (check(TK::KW_PYTHON) && peek(1).type == TK::LBRACKET)) return parse_interop_block();
             return parse_assignment_or_expr();
         default:
             return parse_assignment_or_expr();
@@ -487,6 +492,7 @@ AxonNode* Parser::parse_assignment_or_expr() {
         AxonNode* n = node(AXON_NODE_ASSIGNMENT);
         n->as.assignment.name  = intern(advance().value);
         advance(); // consume '='
+        if (std::string(n->as.assignment.name) == "__result__") error("InteropError: __result__ is reserved and read-only");
         n->as.assignment.value = parse_expr();
         return n;
     }
@@ -494,6 +500,13 @@ AxonNode* Parser::parse_assignment_or_expr() {
     // Parse full expression (may be LHS of index/attr assignment)
     AxonNode* lhs = parse_expr();
 
+    if (check(TK::ASSIGN)) {
+        AxonNode* root = lhs;
+        while (root && (root->type == AXON_NODE_INDEX_ACCESS || root->type == AXON_NODE_ATTR_ACCESS))
+            root = root->type == AXON_NODE_INDEX_ACCESS ? root->as.index_access.obj : root->as.attr_access.obj;
+        if (root && root->type == AXON_NODE_IDENTIFIER && std::string(root->as.identifier.name) == "__result__")
+            error("InteropError: __result__ is reserved and read-only; copy it before modifying");
+    }
     // obj[key] = value
     if (lhs && lhs->type == AXON_NODE_INDEX_ACCESS && check(TK::ASSIGN)) {
         advance(); // consume '='
@@ -666,6 +679,7 @@ AxonNode* Parser::parse_return() {
 // func(p1, p2) { body }        — anonymous expression
 // (p1, p2) => expr             — arrow
 AxonNode* Parser::parse_func_def() {
+    const int previous_scope = _python_scope; _python_scope = 1;
     AxonNode* n = node(AXON_NODE_FUNC_DEF);
     n->as.func_def.name     = nullptr;
     n->as.func_def.is_arrow = false;
@@ -675,6 +689,7 @@ AxonNode* Parser::parse_func_def() {
 
     // Optional name
     if (current().type == TK::IDENT) {
+        if(current().value=="__result__") error("InteropError: __result__ is reserved and read-only");
         n->as.func_def.name = intern(current().value);
         advance();
     }
@@ -685,6 +700,7 @@ AxonNode* Parser::parse_func_def() {
         std::string pname;
         // Accept any identifier or keyword as param name
         pname = current().value; advance();
+        if(pname=="__result__") error("InteropError: __result__ is reserved and read-only");
         // Skip ': type' annotation
         if (check(TK::COLON)) { advance(); advance(); }
         // Skip '= default' value
@@ -717,6 +733,7 @@ AxonNode* Parser::parse_func_def() {
         }
         expect(TK::RBRACE, "func body close");
     }
+    _python_scope = previous_scope;
     return n;
 }
 
@@ -729,10 +746,30 @@ AxonNode* Parser::parse_interop_block() {
         case TK::KW_SHELL:  lang=AXON_INTEROP_SHELL;  break;
         default:            lang=AXON_INTEROP_CPP;    break;
     }
+    if (lang == AXON_INTEROP_PYTHON && _python_scope == 0)
+        error("PythonInteropError: python blocks are allowed only in global main and functions");
+    axon_kvlist_init(&n->as.interop_block.inputs);
     advance(); // consume lang keyword
+    if (lang == AXON_INTEROP_PYTHON && match(TK::LBRACKET)) {
+        std::set<std::string> names;
+        while (!check(TK::RBRACKET) && !at_end()) {
+            const Token name = current();
+            bool valid = !name.value.empty() && (std::isalpha(static_cast<unsigned char>(name.value[0])) || name.value[0]=='_');
+            for(char c:name.value) valid = valid && (std::isalnum(static_cast<unsigned char>(c)) || c=='_');
+            if(!valid) { error("PythonInteropError: expected Python input name"); break; }
+            advance();
+            if (!names.insert(name.value).second) error("PythonInteropError: duplicate input '" + name.value + "'");
+            expect(TK::ASSIGN, "Python input assignment");
+            AxonNode* value = parse_expr();
+            axon_kvlist_push(&n->as.interop_block.inputs, intern(name.value), value, _arena);
+            if (!match(TK::COMMA)) break;
+        }
+        expect(TK::RBRACKET, "Python input list close");
+    }
     expect(TK::LBRACE,"interop block open");
     if (check(TK::RAW_CODE)) {
         n->as.interop_block.lang = lang;
+        n->as.interop_block.code_line = static_cast<int>(current().line);
         n->as.interop_block.code = intern(advance().value);
         expect(TK::RBRACE, "interop block close");
         return n;
@@ -1107,6 +1144,7 @@ AxonNode* Parser::parse_primary() {
             advance(); // consume (
             while (!check(TK::RPAREN) && !at_end()) {
                 std::string pname = current().value; advance();
+                if(pname=="__result__") error("InteropError: __result__ is reserved and read-only");
                 if (check(TK::COLON)) { advance(); advance(); } // skip type
                 AxonNode* p = node(AXON_NODE_IDENTIFIER);
                 p->as.identifier.name = intern(pname);
@@ -1326,6 +1364,7 @@ AxonNode* Parser::parse_storage_def() {
 
 // ── parse_global_main ─────────────────────────────────────────
 AxonNode* Parser::parse_global_main() {
+    const int previous_scope = _python_scope; _python_scope = 1;
     AxonNode* n = node(AXON_NODE_GLOBAL_MAIN);
     advance(); // consume 'main'
     axon_nodelist_init(&n->as.global_main.body);
@@ -1335,6 +1374,7 @@ AxonNode* Parser::parse_global_main() {
         if (s) axon_nodelist_push(&n->as.global_main.body, s, _arena);
     }
     expect(TK::RBRACE, "main body close");
+    _python_scope = previous_scope;
     return n;
 }
 

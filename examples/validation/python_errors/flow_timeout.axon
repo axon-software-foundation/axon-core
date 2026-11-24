@@ -1,0 +1,11 @@
+# Expected RUNTIME failure: TimeoutError; exit 1, and the Python child must stop promptly.
+# Unlike the other files in this folder, syntax check succeeds. Run this file to test the budget.
+flow Deadline { debug=false timeout=0.2 }
+main {
+    python {
+        import time
+        time.sleep(30)
+        return "SHOULD_NOT_RETURN"
+    }
+    print("SHOULD_NOT_RUN")
+}

@@ -1,0 +1,2 @@
+# Expected syntax error: reserved and read-only
+func f(__result__) { return 1 } main {}

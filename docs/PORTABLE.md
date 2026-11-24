@@ -57,3 +57,11 @@ The Windows HTTP client is a pinned static libcurl build using Schannel and the 
 store. OpenSSL is needed to build/run the source-tree TLS fixture tests, not to run the Windows CLI.
 Unix archives use system libcurl/TLS libraries and system trust roots; install the matching runtime
 packages. Docker's runtime image installs libcurl. The curl license is included in portable notices.
+
+## Optional external Python
+
+Python is not bundled. To execute Python blocks, install Python 3.9+ and set AXON_PYTHON to its
+executable (or use the platform default on PATH). Install required packages into that interpreter.
+Native Axon and SQLite do not require it. The packaging check uses the build host's discovered
+Python to run the extracted Python acceptance example from an unrelated directory with spaces;
+this verifies interop without claiming a self-contained Python distribution. See PYTHON_INTEROP.md.

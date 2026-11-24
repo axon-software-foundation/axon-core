@@ -72,7 +72,8 @@ image inputs. Provider names in old examples are not implemented adapters.
 
 Expand memory/TTL/persistence, embeddings/HNSW, PDF, DOCX/XLSX, images and OCR integration fixtures.
 Document native PDF architecture rather than claiming MuPDF. Remove fixed OCR temporary-file collisions
-before concurrent use. Consolidate Python/shell typed exchange, result/error reporting, subprocess lifecycle and cancellation.
+before concurrent use. External Python typed exchange, explicit inputs, result/error reporting and cancellable subprocesses
+are implemented in the working tree; new-patch platform acceptance remains required. See PYTHON_INTEROP.md.
 Native SQLite connections have Linux/Windows native/package acceptance. Contextual flow.database alias
 registries and pure sql->validate are implemented in the working tree and require their own acceptance.
 The agreed next driver order is DuckDB, then PostgreSQL, preserving explicit connection configuration

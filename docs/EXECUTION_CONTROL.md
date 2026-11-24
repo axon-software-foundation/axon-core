@@ -69,3 +69,10 @@ With a real Ollama service and `llama3.2` installed, run:
 
 Use `axon.exe` on Windows. This performs real generation, checks an intentional missing-model HTTP
 failure, then generates again. It is manual integration acceptance, separate from service-free CI.
+
+## External interop processes
+
+Python and shell blocks inherit ExecutionControl and can shorten it with AXON_INTEROP_TIMEOUT.
+Cancellation/deadline termination applies to their child process group/job and joins the direct child.
+This does not make unrelated native document/OCR operations preemptible. See
+[PYTHON_INTEROP.md](PYTHON_INTEROP.md) for output limits and process boundaries.

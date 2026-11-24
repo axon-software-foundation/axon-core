@@ -1,0 +1,8 @@
+# Imported Axon function must resolve Python imports beside THIS file.
+func imported_python_worker(values) {
+    python [data=values] {
+        from transform import summarize
+        return summarize(data)
+    }
+    return __result__
+}

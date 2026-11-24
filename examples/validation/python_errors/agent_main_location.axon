@@ -1,0 +1,2 @@
+# Expected syntax error: allowed only
+agent A { main { python { return 1 } } } main {}

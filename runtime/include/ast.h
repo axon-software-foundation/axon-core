@@ -391,6 +391,8 @@ struct AxonNode {
         struct {
             AxonInteropLang lang;
             const char*     code;
+            AxonKVList      inputs;
+            int             code_line;
         } interop_block;
 
         /* EXPR_STMT */

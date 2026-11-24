@@ -33,8 +33,9 @@ the release scope is ready; changing the suffix alone does not complete that wor
    connection lifecycle, parameter binding, typed results and per-connection concurrency controls.
    Configuration can live in flows/main/functions. The contextual flow.database alias contract now has
    focused working-tree validation and an explicit migration from flat declarations. Validate it on native platforms;
-   implement DuckDB next, then PostgreSQL as separate driver blocks. Python/shell typed values,
-   process failures and cancellation remain independent work. See [INTEROP.md](INTEROP.md).
+   external Python/shell typed results and process cancellation now have a separate working-tree block
+   requiring native/CI acceptance. Then add DuckDB and PostgreSQL separately. See
+   [INTEROP.md](INTEROP.md) and [PYTHON_INTEROP.md](../../docs/PYTHON_INTEROP.md).
 6. **Remaining release blockers.** Address confirmed failures in the selected modules, document
    explicit support boundaries for document formats/memory/interop, and migrate examples advertised
    as runnable. Add fixtures where they expose a concrete unsupported edge or protect a fix.

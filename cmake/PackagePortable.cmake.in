@@ -3,6 +3,8 @@ set(version "@AXON_VERSION@")
 set(source [==[@CMAKE_CURRENT_SOURCE_DIR@]==])
 set(build [==[@CMAKE_CURRENT_BINARY_DIR@]==])
 set(dist [==[@AXON_DIST_DIR@]==])
+# Bracket quoting preserves native Windows backslashes during configure_file.
+set(python_executable [==[@Python3_EXECUTABLE@]==])
 if(NOT AXON_CONFIG STREQUAL "Release")
     message(FATAL_ERROR "Portable packages require Release; use scripts/package.sh")
 endif()
@@ -40,8 +42,8 @@ file(COPY "${source}/licenses" DESTINATION "${root}")
 file(COPY "${source}/docs/PORTABLE.md" "${source}/docs/RELEASE_NOTES.md"
     "${source}/docs/ROADMAP.md" "${source}/docs/HTTP_STATUS.md"
     "${source}/docs/LANGUAGE.md" "${source}/docs/MODULES.md"
-    "${source}/docs/EXECUTION_CONTROL.md" "${source}/docs/PARALLEL.md" "${source}/docs/INTEROP.md" DESTINATION "${root}/docs")
-file(COPY "${source}/examples/validation" DESTINATION "${root}/examples")
+    "${source}/docs/EXECUTION_CONTROL.md" "${source}/docs/PARALLEL.md" "${source}/docs/INTEROP.md" "${source}/docs/PYTHON_INTEROP.md" DESTINATION "${root}/docs")
+file(COPY "${source}/examples/validation" DESTINATION "${root}/examples" PATTERN "__pycache__" EXCLUDE PATTERN "*.pyc" EXCLUDE)
 file(COPY "${source}/examples/flows.axon" DESTINATION "${root}/examples")
 
 file(WRITE "${root}/BUILD_INFO.txt"
@@ -167,6 +169,17 @@ foreach(sample functions main tasks delays sqlite flow_database)
     smoke(0 run "${installed}/examples/validation/${sample}.axon")
 endforeach()
 smoke(0 run "${installed}/examples/flows.axon")
+# Python is an external test dependency, not a bundled portable runtime requirement.
+if(NOT python_executable STREQUAL "")
+    execute_process(COMMAND "@CMAKE_COMMAND@" -E env "AXON_PYTHON=${python_executable}"
+        "${executable}" run "${installed}/examples/validation/python_interop.axon"
+        WORKING_DIRECTORY "${check}/unrelated working directory" RESULT_VARIABLE python_result
+        OUTPUT_VARIABLE python_output ERROR_VARIABLE python_error TIMEOUT 45)
+    if(NOT "${python_result}" STREQUAL "0" OR NOT python_output MATCHES "PASS Python interop complete acceptance")
+        message(FATAL_ERROR "Extracted Python acceptance failed: ${python_result}\n${python_output}\n${python_error}")
+    endif()
+endif()
+
 file(WRITE "${check}/uncaught.axon" "main { raise \"portable expected error\" }\n")
 smoke(1 run "${check}/uncaught.axon")
 if(NOT smoke_output MATCHES "uncaught raise: portable expected error")

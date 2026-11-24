@@ -80,3 +80,7 @@ tmp/
 # Container and community validation outputs
 /build-linux/
 /dist-docker/
+
+# User Python module caches
+__pycache__/
+*.pyc

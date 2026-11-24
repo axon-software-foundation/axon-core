@@ -279,3 +279,25 @@ identifier in main/functions. Opening resources remains explicit through sql->co
 [INTEROP.md](INTEROP.md) for schema rules, dynamic validation and migration from the first flat shape.
 Literal duplicate declarations/aliases/options are check-time errors; other configuration values are
 validated when run evaluates the declaration. This is not global keyword reservation or implicit DB I/O.
+
+## External Python blocks
+
+Python blocks are statements in global main/functions, with optional explicit multiline parameters.
+Returns publish a typed value in the read-only, context-local `__result__`. Tuples become lists.
+See [PYTHON_INTEROP.md](PYTHON_INTEROP.md) for types, execution configuration, isolation and migration.
+
+<!-- axon-check: check -->
+```axon
+main {
+    values=[10,20,30]
+    python [
+        data=values,
+    ] {
+        return {"total":sum(data)}
+    }
+    print(__result__["total"])
+}
+```
+
+The example above is syntax-checked by docs.examples; real execution is covered separately by
+python.python_interop and requires external Python.

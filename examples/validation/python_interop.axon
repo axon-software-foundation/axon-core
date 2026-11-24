@@ -1,0 +1,170 @@
+# Full positive acceptance. Requires Python 3.9+; no third-party packages.
+# Optional: set AXON_PYTHON to the exact Python/venv executable before running.
+import "./python_helpers/worker.axon"
+flow PythonChecks { debug=false timeout=30 }
+func assert_ok(condition,message) { if condition!=true { raise message } }
+func worker(value) {
+    assert_ok(__result__==null,"function result was inherited")
+    python [number=value] {
+        import time
+        time.sleep(0.1)
+        return {"value": number * 2}
+    }
+    return __result__
+}
+func failing_worker() {
+    python { raise RuntimeError("parallel Python failure") }
+    return __result__
+}
+func waiting_worker() {
+    python {
+        import time
+        time.sleep(30)
+        return "SHOULD_NOT_RETURN"
+    }
+    return __result__
+}
+main {
+    assert_ok(__result__==null,"initial result should be null")
+    name="Darío"
+    values=[10,20,30]
+    python [
+        person = name,
+        model = "custom",
+        data = values,
+        options = {"enabled":true,"empty":null,"nested":[[1],{"x":"hello"}]},
+    ] {
+        assert person == "Darío" and model == "custom"
+        assert options["enabled"] is True and options["empty"] is None
+        data.append(40)
+        return {"total":sum(data),"count":len(data),"person":person,"nested":options["nested"]}
+    }
+    saved=__result__
+    assert_ok(saved["total"]==100&&saved["count"]==4,"input/output conversion")
+    assert_ok(values.size()==3,"Python mutated the Axon input")
+    assert_ok(saved["person"]==name&&saved["nested"][1]["x"]=="hello","nested Unicode conversion")
+    print("PASS 01: explicit multiline inputs, typed nested values and copying")
+
+    python {
+        first, second = 7, "two"
+        return first, second, (True, None)
+    }
+    assert_ok(__result__[0]==7&&__result__[1]=="two"&&__result__[2][0]==true&&__result__[2][1]==null,"tuple conversion")
+    python { return [] }
+    assert_ok(typeof(__result__)=="list"&&__result__.isempty(),"empty list")
+    python { return {} }
+    assert_ok(typeof(__result__)=="dict"&&__result__.isempty(),"empty dictionary")
+    python { return 1.23456789012345 }
+    assert_ok(__result__==1.23456789012345,"float precision")
+    python { return 9007199254740991 }
+    assert_ok(__result__==9007199254740991,"safe integer boundary")
+    python { return "Unicode: café 世界 😀\n\t\x00" }
+    assert_ok(__result__.find("世界")>=0,"Unicode result")
+    print("PASS 02: scalar, empty containers, tuple, precision and Unicode returns")
+
+    python {
+        private_value = 123
+        import decimal
+        print("stdout is not a result: __COG__42")
+    }
+    assert_ok(__result__==null,"missing return should be null")
+    python {
+        assert "private_value" not in locals() and "decimal" not in globals()
+        assert "name" not in locals() and "values" not in locals()
+        return "fresh process"
+    }
+    assert_ok(__result__=="fresh process","block isolation")
+    assert_ok(saved["total"]==100,"saved result was overwritten")
+    print("PASS 03: isolation, no implicit injection and separate print channel")
+
+    try {
+        python { raise ValueError("expected failure") }
+        raise "Python exception disappeared"
+    } catch err {
+        assert_ok(err.find("ValueError")>=0&&err.find("expected failure")>=0&&err.find("Traceback")>=0,"exception detail lost")
+        assert_ok(__result__==null,"stale result after exception")
+    }
+    try {
+        python { return {"bad": object()} }
+        raise "unsupported object accepted"
+    } catch err { assert_ok(err.find("unsupported interop type")>=0,"object error lost") }
+    try {
+        python { return {1:"bad key"} }
+        raise "nonstring key accepted"
+    } catch err { assert_ok(err.find("keys must be strings")>=0,"key error lost") }
+    try {
+        python { return 9007199254740992 }
+        raise "large integer accepted"
+    } catch err { assert_ok(err.find("exact range")>=0,"integer error lost") }
+    try {
+        python { return float("nan") }
+        raise "NaN accepted"
+    } catch err { assert_ok(err.find("non-finite")>=0,"NaN error lost") }
+    try {
+        python {
+            cycle=[]
+            cycle.append(cycle)
+            return cycle
+        }
+        raise "cycle accepted"
+    } catch err { assert_ok(err.find("cyclic")>=0,"cycle error lost") }
+    try {
+        python [bad=worker] { return bad }
+        raise "runtime function crossed interop"
+    } catch err {
+        assert_ok(err.find("handles/functions cannot cross")>=0,"input type error lost")
+        assert_ok(__result__==null,"stale result after input conversion failure")
+    }
+    python { return [1,2] }
+    try { __result__.append(3) }
+    catch err { assert_ok(err.find("read-only")>=0,"readonly result method guard") }
+    assert_ok(__result__.size()==2,"reserved result was mutated")
+    print("PASS 04: catchable exceptions and invalid output rejection")
+
+    python [data=values] {
+        # These unmatched braces must not close the Axon block: } } }
+        text = "}"  # preserve strings and comments
+        multiline = """first } line
+        second { line"""
+        class Model:
+            def predict(self, values):
+                return [value * 3 for value in values]
+        def run(values):
+            return Model().predict(values)
+        from python_helpers.transform import summarize
+        return {"predictions":run(data),"summary":summarize(data),"text":text,"multiline":multiline}
+    }
+    assert_ok(__result__["predictions"][2]==90&&__result__["summary"]["total"]==60,"classes/functions/imports")
+    assert_ok(__result__["text"]=="}","raw Python string parsing")
+    imported=imported_python_worker(values)
+    assert_ok(imported["total"]==60,"imported Axon function resolved wrong Python directory")
+    print("PASS 05: large blocks, classes, functions, local modules and raw source")
+
+    parent=__result__
+    parallel { left=worker(10) right=worker(20) }
+    assert_ok(left["value"]==20&&right["value"]==40,"parallel results mixed")
+    assert_ok(__result__["summary"]["total"]==parent["summary"]["total"],"function/branch result leaked")
+    unchanged=123
+    try {
+        parallel { unchanged=failing_worker() waiting=waiting_worker() }
+        raise "parallel Python failure was hidden"
+    } catch err {
+        assert_ok(err.find("parallel Python failure")>=0,"parallel error detail lost")
+    }
+    assert_ok(unchanged==123,"failed parallel branch committed a binding")
+    print("PASS 06: independent contexts, parallel failure and sibling cancellation")
+
+    shell { echo shell-output }
+    assert_ok(__result__["exit_code"]==0&&__result__["stdout"].find("shell-output")>=0,"shell envelope")
+    shell_saved=__result__
+    python [previous=__result__["stdout"]] {
+        return {"received":previous.strip()}
+    }
+    assert_ok(__result__["received"]=="shell-output","shell to Python transfer")
+    direct_output=shell->exec("echo direct-shell")
+    assert_ok(direct_output.find("direct-shell")>=0&&__result__["exit_code"]==0,"shell exec compatibility")
+    python { return None }
+    assert_ok(__result__==null,"explicit None")
+    print("PASS 07: shell/Python last-result replacement and explicit handoff")
+    print("PASS Python interop complete acceptance")
+}

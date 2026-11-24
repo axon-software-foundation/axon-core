@@ -40,3 +40,11 @@ The Actions artifact-container digest differs from the portable `.zip.sha256`; d
 for the other. Follow [GITHUB_LAUNCH.md](GITHUB_LAUNCH.md) for exact-tag acceptance.
 Configure required checks using actual job names. Keep experimental macOS non-required until its
 support policy is decided; this document does not change branch protection.
+
+## Python interop tests
+
+BUILD_TESTING now requires Python 3.9+ (standard library only). Linux and Docker build stages
+install python3; UCRT64 installs mingw-w64-ucrt-x86_64-python. CTest supplies the interpreter selected
+by CMake through AXON_PYTHON. The new process, positive/parallel Axon and nine syntax-fixture checks
+run without pandas, scikit-learn, Ollama or public HTTP. Optional ML acceptance is documented in
+PYTHON_INTEROP.md and is not a CI dependency. Python is not copied into portable packages.

@@ -69,3 +69,10 @@ The Ubuntu 24.04 base uses a mutable tag rather than a pinned digest; bit-for-bi
 The build stage installs libcurl/OpenSSL development packages for public HTTP and controlled TLS
 fixtures. The runtime stage installs system libcurl and CA certificates; test keys and fixture
 executables are not copied into the image.
+
+## External Python
+
+The build/test stage installs Python 3 for interop acceptance. The final runtime image keeps Python
+optional and does not include it or ML packages. Extend that image with an interpreter/environment
+when Python blocks are needed, then set AXON_PYTHON to its executable. Native Axon/SQLite execution
+remains independent. Python processes retain the container's permissions; interop is not a sandbox.

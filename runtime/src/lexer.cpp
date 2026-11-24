@@ -135,6 +135,18 @@ std::vector<Token> Lexer::tokenize() {
         if (tok.is_interop_lang()) {
             tokens.push_back(tok);
             skip_ws_and_comments();
+            if (tok.type == TK::KW_PYTHON && peek() == '[') {
+                int brackets = 0;
+                do {
+                    skip_ws_and_comments();
+                    if (at_end()) { push_error("unterminated Python parameter list"); break; }
+                    Token parameter = read_next();
+                    if (parameter.type == TK::LBRACKET) ++brackets;
+                    if (parameter.type == TK::RBRACKET) --brackets;
+                    tokens.push_back(parameter);
+                } while (brackets > 0);
+                skip_ws_and_comments();
+            }
             if (!at_end() && peek() == '{') {
                 advance();                              // consume '{'
                 tokens.push_back(make(TK::LBRACE, "{"));
@@ -352,10 +364,35 @@ Token Lexer::read_ident_or_kw() {
 
 // Called by parser after consuming the interop keyword + '{'
 Token Lexer::read_raw_block(TK language) {
+    const auto start_line=_line, start_col=_col;
     std::string code;
     int depth = 1;
     while (!at_end()&&depth>0) {
         char c = peek();
+        if (language == TK::KW_PYTHON || language == TK::KW_SHELL) {
+            if (c == '#') {
+                while (!at_end() && peek() != '\n') code += advance();
+                continue;
+            }
+            if (c == '\'' || c == '"' || (language == TK::KW_SHELL && c == '`')) {
+                const char quote = c;
+                const bool triple = language == TK::KW_PYTHON && peek(1) == quote && peek(2) == quote;
+                code += advance();
+                if (triple) { code += advance(); code += advance(); }
+                while (!at_end()) {
+                    if (peek() == '\\') {
+                        code += advance(); if (!at_end()) code += advance(); continue;
+                    }
+                    if (peek() == quote && (!triple || (peek(1) == quote && peek(2) == quote))) {
+                        code += advance();
+                        if (triple) { code += advance(); code += advance(); }
+                        break;
+                    }
+                    code += advance();
+                }
+                continue;
+            }
+        }
         if (language == TK::KW_SQL) {
             // SQL literals, quoted identifiers and comments may contain unmatched braces.
             if (c == '\'' || c == '"' || c == '`' || c == '[') {
@@ -389,7 +426,7 @@ Token Lexer::read_raw_block(TK language) {
     }
     if (at_end()&&depth>0) push_error("unterminated interop block");
     else                   advance(); // consume '}'
-    return make(TK::RAW_CODE, code);
+    return Token{TK::RAW_CODE,code,start_line,start_col};
 }
 
 } // namespace axon

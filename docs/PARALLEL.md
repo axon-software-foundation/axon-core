@@ -45,16 +45,15 @@ See [EXECUTION_CONTROL.md](EXECUTION_CONTROL.md) for deadline and cancellation l
 
 The existing key-value scopes remain explicitly shared through the interpreter's memory service;
 they do not acquire new per-agent/per-branch ownership in this change. Native module operations,
-including memory, semantic memory, file/document/OCR and shell/Python interop, are serialized across
-sibling interpreters for safety. Compound read-modify-write sequences are not atomic transactions.
+including memory, semantic memory and file/document/OCR, are serialized across sibling interpreters
+for safety. External Python and shell use independent processes and do not hold that native lock. Compound read-modify-write sequences are not atomic transactions.
 Ollama task requests, ordinary expression evaluation and direct `sleep()` calls can overlap.
 
-OCR and Python interop use exclusively created temporary directories with automatic cleanup,
-replacing fixed filenames. Python script generation now uses its existing dedented code and avoids
-overwriting Python print with Axon's injected built-in marker. Injected strings escape newlines and
-control characters. Interop result values retain their
-existing string representation. This prevents temporary-output collisions across branches/processes;
-it does not isolate arbitrary user code or make external native calls forcibly cancellable.
+OCR and external interop use unique temporary directories with cleanup. Python inputs are explicit,
+returns are typed, and every block starts a new process. Each parallel branch/function owns a
+separate __result__ context, which is not merged implicitly into its caller. Use ordinary returned
+function values in parallel assignments. Child processes support inherited deadlines/cancellation;
+other non-preemptible native services can still delay joins. See [PYTHON_INTEROP.md](PYTHON_INTEROP.md).
 
 Ollama opts into concurrent requests. Existing/custom provider adapters are serialized unless they
 override `supports_concurrent_requests()` to return true; that opt-in promises thread-safe `complete`

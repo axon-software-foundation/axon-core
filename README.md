@@ -131,3 +131,8 @@ sources; the resulting runtime needs no external SQLite DLL, CLI, Python or serv
 Within a flow, `database` declares configurations by alias; opening is explicit. See
 [the connection contract and migration](docs/INTEROP.md#contextual-flowdatabase-registry) and
 `examples/validation/flow_database.axon` for executable acceptance.
+
+External Python supports explicit multiline inputs, typed returns and an independent process per
+block. See [Python interoperability](../docs/PYTHON_INTEROP.md) and the runnable
+[acceptance example](../examples/validation/python_interop.axon). Python and its packages are supplied
+by the user; native Axon/SQLite execution does not depend on Python.

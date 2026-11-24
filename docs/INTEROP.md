@@ -2,9 +2,9 @@
 
 The interoperability goal is to make Python, SQL and host shells usable from ordinary Axon programs,
 not only inside agents/tasks. Implementation and acceptance proceed in independent blocks.
-This change implements native SQLite connections. DuckDB is next, then PostgreSQL; they are not
-supported drivers yet. Strengthening Python/shell data exchange and subprocess management remains
-an independent block; this SQL change does not certify those integrations as complete.
+Native SQLite connections are implemented. DuckDB and PostgreSQL remain future drivers. External
+Python now has explicit inputs, typed returns and independent child processes; shell shares the
+controlled process backend. See [PYTHON_INTEROP.md](PYTHON_INTEROP.md) for the complete contract.
 
 ## Connection contract
 
