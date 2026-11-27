@@ -1,33 +1,65 @@
-# Axon 0.4.0-alpha.1 — prerelease candidate
+# Axon 0.4.0-alpha.2
 
-Draft notes for a future GitHub prerelease; this file does not establish publication.
-Alpha syntax/APIs may change and there is no stable compatibility guarantee yet.
+This prerelease expands local orchestration with native parallel execution, HTTP/HTTPS, SQLite
+and explicit Python interoperability. Syntax and APIs remain subject to change.
 
-## Included
+## Highlights
 
-Functions/closures and relative imports; controlled diagnostics and exit codes; whole-agent,
-individual-task and pipeline calls; task input/output references and invocation isolation;
-post-delays; scheduler shutdown fix; strict cross-platform warning fixes; Windows portable
-packaging with checksums and extracted execution checks.
+- Enforced flow/agent/task execution budgets, host cancellation and clear provider errors.
+- Native parallel branches with isolated environments, ordered publication and sibling cancellation.
+- Public HTTP/HTTPS GET, POST and JSON calls with typed responses, TLS verification and limits.
+- Native SQLite connections, parameterized queries, transactions, named handles and typed results.
+- Multiple database configuration aliases per flow, validated without opening connections.
+- External Python blocks with explicit multiline inputs, ordinary return and typed __result__;
+  tuples become lists. Independent processes support cancellation and report Python tracebacks.
+- Shell stdout/stderr/exit status use a structured result, with Windows command-echo correction.
+- PDF progress, strict cross-platform build, source-path and portable Python-path fixes.
+- Executable documentation and expanded native/CLI acceptance fixtures.
 
-The baseline CI passed Linux/Windows Debug and Release, experimental native macOS and Linux Docker.
-Selected Markdown examples are now checked directly by CTest. See [VALIDATION.md](VALIDATION.md)
-for what is executed versus syntax-only. Live Ollama task chaining was separately checked manually
-on Windows. A previous Windows portable also ran on a second machine; the final tag artifact still
-requires its own acceptance and checksum. Never copy a previous candidate's hash into new release assets.
+## Migration from alpha.1
+
+- Functions now require their declared number of positional arguments.
+- Provider failures raise errors; missing providers no longer masquerade as successful generation.
+- Parallel branches execute concurrently; do not depend on sequential sibling side effects.
+- Wrap flat flow.database configs in aliases, for example
+  `database={"primary":{"driver":"sqlite","database":":memory:"}}`, then open explicitly with
+  `sql->connect(App.database["primary"])`. Multiple aliases are supported.
+- Python inputs must be declared with `python [name=value] { ... }`. Use `return` inside Python,
+  then read typed `__result__` in Axon. Assigning Python __result__ is not a return mechanism.
+- Shell block __result__ is a dictionary: read stdout, stderr and exit_code explicitly.
+
+See [INTEROP.md](INTEROP.md), [PYTHON_INTEROP.md](PYTHON_INTEROP.md),
+[PARALLEL.md](PARALLEL.md) and [LANGUAGE.md](LANGUAGE.md) for the complete contracts.
+
+## Runtime requirements and downloads
+
+Native Axon and SQLite do not require Python, a database server or the sqlite3 command-line tool.
+Python blocks require an external Python 3.9+ interpreter; select a virtual environment with
+AXON_PYTHON and install your libraries there. Ollama/models and Tesseract remain optional external
+integrations. These tools, model weights and Python packages are not bundled.
+
+Download only assets attached to the official
+[GitHub release](https://github.com/axon-software-foundation/axon-core/releases).
+Verify each archive against its matching .sha256 file before extraction. An Actions artifact
+container is not the portable archive; extract it first. Consult PORTABLE.md for acceptance.
+
+## Platform boundaries
+
+- Windows x64: portable MinGW/UCRT64 package; no installer, signing or automatic updater.
+- Linux x86_64: native archive requiring system libraries; no cross-distribution ABI guarantee.
+- macOS: experimental native CI; no downloadable macOS package or signing/universal-binary claim.
+- Docker: Linux CI/runtime image workflow; no registry publication is implied.
 
 ## Known limitations
 
-- Windows x64 uses MinGW GCC portable packaging; no installer, code signing or automatic updater.
-- Linux native archives have no established cross-distribution ABI baseline.
-- macOS CI is experimental/non-blocking; no macOS package, signing or architecture-wide support claim.
-- HTTP/REST and MCP are not public implemented modules. Storage/Whisper calls are stubs.
-- Timeouts/cancellation and actual parallel language execution are pending.
-- Additional providers, complete multi-flow ownership, automatic RAG, training and mesh remain roadmap work.
-- Document/image/OCR/semantic-memory integrations need expanded coverage; OCR temporary names collide
-  under concurrent execution. Key-value memory stores strings, not arbitrary typed objects.
-- Ollama, model weights and Tesseract are not included. Missing-provider passthrough is not LLM generation.
+- DuckDB, PostgreSQL, MongoDB adapters, MCP, gRPC, scraping and additional model providers remain roadmap work.
+- Configurable direct-program arguments, environment variables and stdin for shell are not implemented.
+- No embedded CPython, persistent Python sessions or C++ interop backend. Python results accept only
+  the documented compatible types; DataFrames/models/connections require explicit conversion/export.
+- Child-process output is buffered; process isolation is not a security sandbox or a RAM quota.
+- Document/image/OCR/semantic-memory coverage, graph policy and multi-flow ownership need further work.
+- Key-value memory is string-based; storage operations beyond the documented SQL query alias and
+  Whisper integrations are incomplete.
 
-Before publishing, confirm the tag commit, trusted CI run, exact portable acceptance, notices/provenance,
-working private reporting channel and all asset checksums. In the final release description, list only
-assets actually attached and platforms actually tested. The website must link to those real downloads.
+Only platforms/assets actually attached and accepted belong to the published release. CI success
+alone does not establish a release, signing, universal compatibility or bit-for-bit reproducibility.

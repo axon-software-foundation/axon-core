@@ -1,7 +1,7 @@
-# Public HTTP/HTTPS module — working-tree implementation
+# Public HTTP/HTTPS module
 
-This implementation is new development after the published 0.4.0-alpha.1 artifacts; rebuilding
-this source enables it. Existing downloaded binaries do not gain the module automatically.
+HTTP/HTTPS is included in the 0.4.0-alpha.2 preparation scope. The older published alpha.1 binaries
+do not gain it automatically; use an accepted alpha.2 artifact after publication or build current source.
 The public module is separate from Ollama's specialized client. HTTP requests can overlap in
 parallel branches and inherit execution deadlines/cancellation.
 

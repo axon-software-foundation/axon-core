@@ -1,4 +1,4 @@
-# Capability inventory — 0.4.0-alpha.1
+# Capability inventory — 0.4.0-alpha.2
 
 This inventory replaces the old phase-based registry as the current capability summary.
 **Implemented** means code exists. **Validated** refers to the evidence named below, not exhaustive
