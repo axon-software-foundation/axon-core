@@ -156,17 +156,17 @@ target_include_directories(axon_test_interp PRIVATE third_party/zlib)
 # ── Automated tests: external Python, no Ollama or public network ─────
 if(BUILD_TESTING)
     find_package(Python3 3.9 COMPONENTS Interpreter REQUIRED)
-    add_executable(axon_test_python ../tests/test_python.cpp runtime/src/interop_process.cpp runtime/src/document_io.cpp)
+    add_executable(axon_test_python tests/test_python.cpp runtime/src/interop_process.cpp runtime/src/document_io.cpp)
     target_include_directories(axon_test_python PRIVATE runtime/include runtime/interfaces)
     target_link_libraries(axon_test_python PRIVATE axon_core)
     add_test(NAME python.syntax_errors COMMAND ${CMAKE_COMMAND}
         "-DAXON_EXE=$<TARGET_FILE:axon>" "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DWORK_ROOT=${CMAKE_CURRENT_BINARY_DIR}/python syntax cases"
-        -P "../tests/test_python_errors.cmake")
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_errors.cmake")
     set_tests_properties(python.syntax_errors PROPERTIES TIMEOUT 30)
     add_test(NAME python.deadline COMMAND ${CMAKE_COMMAND} -E env "AXON_PYTHON=${Python3_EXECUTABLE}"
         ${CMAKE_COMMAND} "-DAXON_EXE=$<TARGET_FILE:axon>" "-DSOURCE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}"
-        -P "../tests/test_python_timeout.cmake")
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_timeout.cmake")
     set_tests_properties(python.deadline PROPERTIES TIMEOUT 15)
     add_test(NAME python.process COMMAND axon_test_python)
     set_tests_properties(python.process PROPERTIES ENVIRONMENT "AXON_PYTHON=${Python3_EXECUTABLE}" TIMEOUT 45)

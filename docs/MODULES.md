@@ -1,4 +1,4 @@
-# Native modules — 0.4.0-alpha.1
+# Native modules — 0.4.0-alpha.2
 
 Native calls use `module->function(...)` without imports. The dispatcher is in
 [runtime/src/interpreter.cpp](../runtime/src/interpreter.cpp); image, codec and hash operations

@@ -1,7 +1,7 @@
 # Validation and evidence
 
-External-interop source baseline: public `main` commit `827e959bd7d4fbcb72a66c583618f95af6f4c46a`,
-version `0.4.0-alpha.1`. This document describes the current repository workflow, not a sequence
+Release implementation baseline: public `main` commit `6f34ba7bfbd97627ba9328bd7d2be5685ba6dc1e`,
+version `0.4.0-alpha.2` (release preparation). This document describes the current repository workflow, not a sequence
 of patches to copy over an old ZIP.
 
 ## Run the baseline
@@ -15,10 +15,9 @@ bash scripts/validate.sh Release -DAXON_WARNINGS_AS_ERRORS=ON
 Windows Git Bash with MSYS2 UCRT64 GCC/Ninja:
 
 ```bash
-bash scripts/validate.sh Release -G Ninja \
-  -DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe \
-  -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe \
-  -DAXON_WARNINGS_AS_ERRORS=ON
+export PATH="/c/msys64/ucrt64/bin:$PATH"
+export AXON_PYTHON="$(python -c 'import sys; print(sys.executable)' | tr -d '\r')"
+bash scripts/validate.sh Release -G Ninja -DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe -DOPENSSL_ROOT_DIR=C:/msys64/ucrt64 -DPython3_EXECUTABLE="$AXON_PYTHON" -DAXON_WARNINGS_AS_ERRORS=ON
 ```
 
 CMake 3.20+, CTest, a C++17 compiler and the selected build tool must be installed.
@@ -143,5 +142,13 @@ PASS groups covering inputs/outputs, errors, source-relative imports, classes/fu
 isolation, parallel and shell handoff. The 141 pre-existing interpreter cases remain unchanged.
 Python 3.9+ is required for BUILD_TESTING; scikit-learn/pandas are not automated-test dependencies.
 The optional python_ml.axon example requires scikit-learn and is separate from CTest; local execution
-passed with scikit-learn 1.8.0. Strict Linux Release passed 53/53 CTest. New-patch
-native Windows/macOS acceptance remains pending. See PYTHON_INTEROP.md for the exact contract.
+passed with scikit-learn 1.8.0. Strict Linux Release passed 53/53 CTest. The merged implementation
+baseline passed native Windows/macOS CI; alpha.2 version/tag acceptance is a separate step. See PYTHON_INTEROP.md for the exact contract.
+
+## Alpha.2 preparation boundary
+
+The implementation baseline 6f34ba7 passed all six Axon CI jobs: Linux GCC Debug/Release,
+Windows UCRT64 Debug/Release, experimental macOS Apple Clang, and Linux Docker. Windows Release
+includes the corrected portable Python path and extracted-package acceptance. This is evidence
+for that commit, not a future version PR/tag. Revalidate the version-preparation commit and exact
+v0.4.0-alpha.2 artifacts, with fresh checksums; never relabel an alpha.1 archive.

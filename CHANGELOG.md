@@ -2,72 +2,62 @@
 
 ## [Unreleased]
 
-- Replace legacy Python scalar injection/string results with explicit multiline bindings, ordinary
-  Python return and typed context-local read-only __result__; normalize tuples to lists.
-- Run independent external Python/shell processes with inherited deadlines, cancellation,
-  separate output/result channels, resource checks and actionable errors.
-- Add Python contract/migration documentation, standard-library acceptance fixtures, optional
-  scikit-learn module example, and portable extraction checks with an external interpreter.
-- Resolve the flow-database CTest script from CMAKE_CURRENT_SOURCE_DIR instead of ../tests.
+No changes recorded after the alpha.2 preparation boundary.
 
+## [0.4.0-alpha.2]
 
-- Reserve flow.database contextually as a validated alias-to-configuration registry, with explicit driver
-  and database fields; keep database available as an ordinary variable/function parameter elsewhere.
-- Reject duplicate literal declarations/aliases/options; report runtime schema errors with flow/alias
-  context, default absent registries to empty, and prevent active-registry leakage between flows.
-- Add pure sql->validate without opening resources; migrate the first SQLite examples and provide
-  complete positive Axon acceptance plus expected-failure declaration fixtures.
+### Added
 
-- Add native SQLite connections with flow/main/function configuration, named lookup, bound parameters,
-  typed results, query/execute/script, explicit transactions and close semantics.
-- Coordinate connections per interpreter family and prevent sibling branches from interleaving an
-  active transaction; support inherited query budgets/cancellation and bounded materialized results.
-- Execute raw SQL blocks on an explicitly selected connection; preserve braces in SQL literals/comments.
-  Replace the storage query placeholder with an explicit-connection SQL alias.
-- Pin static SQLite source provenance and add native, interpreter and CLI regressions. DuckDB then
-  PostgreSQL remain subsequent driver blocks; Python/shell completion is tracked independently.
+- Cooperative flow/agent/task deadlines, host cancellation and interruptible sleep/provider calls.
+- Native parallel blocks and pipeline groups with isolated snapshots, bounded workers, source-order
+  publication and sibling cancellation. Failed groups do not commit branch bindings.
+- Public HTTP/HTTPS GET, POST and JSON calls with typed responses, verified TLS, resource limits,
+  inherited budgets and opt-in same-origin redirects.
+- Native SQLite connections, named lookup, bound parameters, typed rows, explicit transactions,
+  per-connection concurrency, cancellation and controlled lifecycle.
+- Contextual flow.database registries supporting multiple configuration aliases; pure sql->validate.
+- Explicit multiline Python inputs, ordinary Python return and typed context-local __result__.
+  Every block runs in a fresh external process; Python tuples become Axon lists.
+- Controlled Python/shell process lifetimes, separate stdout/stderr and actionable errors/tracebacks.
+- Executable documentation checks, SQL/HTTP/process fixtures and complete Axon acceptance examples.
 
-- Implement public GET/POST/JSON and verified HTTPS using an independent libcurl transport, with structured
-  responses, explicit errors, inherited deadlines/cancellation, limits and opt-in same-origin redirects.
-- Add controlled local HTTP/TLS fixtures and interpreter request-overlap coverage; register PDF progress
-  checks in CTest and normalize source/test paths for builds outside the source directory.
-- Build pinned minimal static curl/Schannel on Windows; use system libcurl on Unix. Document build/test
-  dependencies, runtime packaging and upstream notices. Published binaries and VERSION remain unchanged.
+### Changed
 
-- Execute parallel blocks and pipeline groups using bounded native scheduler jobs, lexical/closure
-  snapshots, source-order result publication and cooperative sibling cancellation.
-- Preserve pipeline groups' last-declared-result convention; publish only top-level branch assignments.
-  Parallel code must use independent branches, not rely on prior sequential sibling side effects.
-- Synchronize existing native services and legacy provider adapters; Ollama opts into concurrent requests.
-  Use unique temporary directories for OCR/Python interop and buffer branch print output in source order.
-- Correct Python interop script indentation and avoid shadowing Python print with Axon's built-in marker;
-  escape multiline injected strings; retain the existing string result contract and add a manual interop acceptance example.
-- Add 21 interpreter concurrency cases, two scheduler cases, two CLI cases and parallel validation examples.
+- User-defined functions require exact positional arity before arguments/body side effects execute.
+- Provider failures raise errors rather than silently returning the input or null.
+- Shell blocks publish stdout/stderr/exit_code dictionaries. Existing shell aliases and the direct
+  stdout-string return from shell->exec remain available.
+- Python blocks require explicit parameter bindings and return; implicit injection, stdout sentinels
+  and stringified results are replaced. Python 3.9+ is required for interop and full build tests,
+  but not for native Axon/SQLite execution.
+- flow.database now maps aliases to configurations; the old flat configuration must be wrapped
+  in an alias such as primary. Registry declarations do not open connections.
 
-- Enforce cooperative flow/agent/task timeouts, including inherited deadlines and post-delays;
-  add host cancellation and interruptible sleep/Ollama socket operations.
-- Raise catchable provider failures instead of returning input passthrough or silent null. Preserve
-  valid non-LLM null results and existing graph failure routes; unhandled graph raises fail the CLI.
-- Use GET and HTTP status for Ollama health; reject incomplete response bodies and missing chat fields.
-- Add 17 interpreter cases, nine real loopback transport cases, two CLI checks and a checked timing
-  example. Document non-preemptible native/interop operations and add manual live-model recovery validation.
+### Fixed
 
-- Require exact positional arity for user-defined functions, including closures, anonymous/arrow
-  functions and imported functions. Invalid calls raise a catchable `ArityError` before evaluating
-  arguments or executing the body. Existing code that relied on missing arguments becoming `null`
-  or extra arguments being ignored must pass the declared number of arguments explicitly.
-- Add eight interpreter regressions, two CLI regressions and a checked documentation example
-  for argument counts, call-line diagnostics and recovery.
+- Native PDF progress regression, waiting-worker scheduler shutdown and portable warning failures.
+- Canonical import diagnostics, controlled raises and existing task input/output validation.
+- Temporary-directory collisions in external interop/OCR paths; synchronized remaining native services.
+- Windows batch command echo contaminating shell stdout.
+- Native Windows Python executable paths being parsed as CMake escapes during portable packaging.
+- Flow-database and Python test source/script resolution without relying on sibling source folders.
 
-- Replace outdated language claims with English references tied to the current interpreter and tests.
-- Add CTest checks of actual README/language/module Markdown examples: execution for self-contained
-  programs, syntax-only for examples requiring a model service.
-- Keep one root MIT `LICENSE`; update installation, portable packaging and third-party references.
-- Include current language/module references in portable archives.
+### Documentation and packaging
 
-## [0.4.0-alpha.1] — release candidate
+- Align English language/module references with tested behavior; retain historical examples as such.
+- Preserve the single root MIT license and dependency/provenance notices.
+- Include current examples/references and checksums in extracted portable acceptance.
+- Validate Linux/Windows Debug and Release, experimental macOS and Linux Docker in CI.
+  Native platform/ABI limits and exact-tag artifact acceptance remain documented.
 
-This heading records candidate scope; it does not establish a published tag or release.
+### Migration
+
+See docs/PYTHON_INTEROP.md, docs/INTEROP.md and docs/RELEASE_NOTES.md. This is a prerelease:
+syntax/APIs may change. DuckDB, PostgreSQL, MCP and other roadmap integrations are not included.
+
+## [0.4.0-alpha.1]
+
+First published prerelease. The scope and evidence below describe that historical baseline.
 
 ### Included
 

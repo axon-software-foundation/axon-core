@@ -2,7 +2,7 @@
 
 A C++17 language runtime for defining agents, chaining tasks and orchestrating local LLM calls.
 
-**Development version: 0.4.0-alpha.1.** APIs and syntax may change during alpha.
+**Development version: 0.4.0-alpha.2.** APIs and syntax may change during alpha.
 [VERSION](VERSION) is the authoritative release identifier. Passing CI does not publish a release.
 See [Releases](https://github.com/axon-software-foundation/axon-core/releases) for actual downloads.
 
@@ -25,16 +25,17 @@ or `./build-validation/axon.exe run hello.axon` in Windows Git Bash.
 
 ## Build and validate
 
-Requirements: CMake 3.20+ (including CTest), a C++17 compiler, Bash and Make/Ninja.
-Ollama and Tesseract are optional and are not required for the automated baseline.
+Requirements: CMake 3.20+ (including CTest), a C++17 compiler, Bash, Make/Ninja and Python 3.9+
+for the complete test suite. Native Axon/SQLite execution does not require Python.
+OpenSSL development files are required for local TLS tests; Unix builds also use system libcurl
+development files. Ollama and Tesseract are optional and are not required for the automated baseline.
 
 Windows, from Git Bash with MSYS2 UCRT64 GCC and Ninja installed:
 
 ```bash
-bash scripts/validate.sh Debug -G Ninja \
-  -DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe \
-  -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe \
-  -DAXON_WARNINGS_AS_ERRORS=ON
+export PATH="/c/msys64/ucrt64/bin:$PATH"
+export AXON_PYTHON="$(python -c 'import sys; print(sys.executable)' | tr -d '\r')"
+bash scripts/validate.sh Debug -G Ninja -DCMAKE_C_COMPILER=C:/msys64/ucrt64/bin/gcc.exe -DCMAKE_CXX_COMPILER=C:/msys64/ucrt64/bin/g++.exe -DOPENSSL_ROOT_DIR=C:/msys64/ucrt64 -DPython3_EXECUTABLE="$AXON_PYTHON" -DAXON_WARNINGS_AS_ERRORS=ON
 ```
 
 Linux or experimental macOS, from the source root:

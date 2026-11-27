@@ -42,7 +42,7 @@ There is no macOS archive target yet.
 From the directory containing the archive and its checksum, in Git Bash:
 
 ```bash
-sha256sum -c axon-v0.4.0-alpha.1-windows-x64.zip.sha256
+sha256sum -c axon-v0.4.0-alpha.2-windows-x64.zip.sha256
 ```
 
 From the extracted root, Git Bash/Linux can check `sha256sum -c MANIFEST.sha256`.

@@ -1,4 +1,4 @@
-# Axon language reference — 0.4.0-alpha.1
+# Axon language reference — 0.4.0-alpha.2
 
 This reference describes the current interpreter rather than the historical phase plan.
 All `axon` fences here are complete programs checked by `docs.examples` in CTest.

@@ -1,7 +1,7 @@
 # Axon Core and Web roadmap
 
-Current development version: **0.4.0-alpha.1**. Reviewed against public-main baseline `7a1537f`
-on 22 November 2026. Implementation, validation and publication are separate states.
+Current development version: **0.4.0-alpha.2** (release preparation). Implementation baseline:
+public main `6f34ba7bfbd97627ba9328bd7d2be5685ba6dc1e`, reviewed on 24 November 2026. Implementation, validation and publication are separate states.
 The [capability inventory](../FEATURES.md) records evidence; historical RFC phases do not establish status.
 
 The first prerelease is now published. Further Core work targets a usable release without a
@@ -20,17 +20,16 @@ for scope and external blocking-call limits. Language-level parallel blocks and 
 use native workers with isolated environments and synchronized services; see [PARALLEL.md](PARALLEL.md).
 Pending: complete graph policy semantics and consistent native-module arity/type errors.
 
-## 2. Publish the first alpha
+## 2. Publish the next prerelease
 
-Completed baseline: official organization repository and merged import, single VERSION source,
-strict CI jobs for Linux/Windows/experimental macOS/Docker, Windows portable packaging and
-second-machine manual execution. The current documentation change reconciles English reference
-content with code, checks Markdown examples and removes the duplicate root license.
+The first alpha is published. Alpha.2 prepares execution budgets, native parallelism, HTTP/HTTPS,
+SQLite and external Python/shell interop already merged in main. All six baseline CI jobs passed,
+including Windows packaging and experimental macOS. The version-preparation PR and exact tag
+artifacts still need their own acceptance. See [RELEASING.md](RELEASING.md),
+[GITHUB_LAUNCH.md](GITHUB_LAUNCH.md) and [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
-Remaining before release: review this change and rerun CI, verify private reporting/contact channels,
-finish vendored provenance review, choose the tag commit, build/tag-test exact artifacts, repeat clean-machine
-acceptance, publish a GitHub prerelease with correct checksums and link it from the web.
-See [GITHUB_LAUNCH.md](GITHUB_LAUNCH.md). No release/image is considered published just because CI passed.
+After alpha.2, agree the supported scope for the first stable release; do not make every later
+roadmap integration a prerequisite. Beta begins when that scope and its public contracts are fixed.
 
 ## 3. Platforms, packaging and beta
 

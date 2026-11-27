@@ -1,4 +1,4 @@
-# Example inventory — 0.4.0-alpha.1
+# Example inventory — 0.4.0-alpha.2
 
 Use `validation/` and `flows.axon` for release acceptance. Historical examples are retained for
 migration and are not all current executable language documentation. Canonical syntax is in
